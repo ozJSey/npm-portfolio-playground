@@ -2,7 +2,8 @@ name: Daily portfolio refresh
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    # Run the npm-backed playground checks three times per day.
+    - cron: '17 3,11,19 * * *'
   workflow_dispatch:
 
 permissions:
