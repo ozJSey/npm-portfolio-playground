@@ -16,6 +16,10 @@ const LIBRARIES = {
 } as const
 
 const TARGET = process.env.PLAYGROUND_TARGET === 'dist' ? 'dist' : 'src'
+const LIBRARY_ALIASES = Object.entries(LIBRARIES).map(([specifier, library]) => ({
+  find: new RegExp(`^${specifier.replace('/', '\\/')}$`),
+  replacement: pkg(`../${library.dir}/${TARGET === 'dist' ? `dist/${library.entry.replace('.ts', '.min.js')}` : library.entry}`),
+}))
 
 /**
  * Upload endpoints for the `v-dropzone` tab. XHR progress events only fire
@@ -94,11 +98,12 @@ export default defineConfig({
       // Exact match only — a string alias would also rewrite `vue/compiler-sfc`.
       { find: /^vue$/, replacement: pkg('./node_modules/vue/dist/vue.runtime.esm-bundler.js') },
       { find: '@', replacement: pkg('./src') },
+      ...LIBRARY_ALIASES,
     ],
     dedupe: ['vue', ...CODEMIRROR_FAMILY],
   },
   optimizeDeps: {
-    exclude: [...LIBRARIES],
+    exclude: Object.keys(LIBRARIES),
     // `vue/compiler-sfc` (1.7 MB) and `sucrase` are the in-browser SFC compiler.
     // Prebundled up front rather than discovered on the first edit: a
     // mid-session re-optimize forces a full page reload, which would land in
