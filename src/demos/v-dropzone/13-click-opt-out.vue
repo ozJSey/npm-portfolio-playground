@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
-import type { DropzoneApi, DropzoneApiRef } from 'v-dropzone'
+import type { DropzoneApi, DropzoneApiRef } from '@ozjsey/v-dropzone'
 
 const defaultDrop = ref<string[]>([])
 const optOutDrop = ref<string[]>([])

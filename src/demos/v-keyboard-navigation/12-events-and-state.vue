@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { KeyboardNavigationEventDetail } from 'v-keyboard-navigation'
+import type { KeyboardNavigationEventDetail } from '@ozjsey/v-keyboard-navigation'
 
 const rows = ref(['Ada', 'Alan', 'Barbara', 'Grace'])
 const log = ref<string[]>([])

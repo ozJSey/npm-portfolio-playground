@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { UploadError } from 'v-dropzone'
+import type { UploadError } from '@ozjsey/v-dropzone'
 
 const endpoint = ref('/api/upload')
 const method = ref<'POST' | 'PUT' | 'PATCH'>('POST')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DropzoneRejectEvent } from 'v-dropzone'
+import type { DropzoneRejectEvent } from '@ozjsey/v-dropzone'
 
 const scope = ref<'host' | 'document'>('document')
 // `pasteOn: 'host'` only hears a paste while focus is inside the host, and the

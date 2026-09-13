@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DropzoneApi, UploadError } from 'v-dropzone'
+import type { DropzoneApi, UploadError } from '@ozjsey/v-dropzone'
 
 const dz = ref<DropzoneApi>()
 const log = ref<string[]>([])

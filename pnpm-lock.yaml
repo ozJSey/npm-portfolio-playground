@@ -8,10 +8,37 @@ importers:
 
   .:
     dependencies:
+      '@ozjsey/v-copy':
+        specifier: ^1.1.0
+        version: 1.1.0(vue@3.5.41(typescript@5.9.3))
+      '@ozjsey/v-dropzone':
+        specifier: ^0.1.0
+        version: 0.1.0(vue@3.5.41(typescript@5.9.3))
+      '@ozjsey/v-fit-children':
+        specifier: ^2.2.0
+        version: 2.2.0(vue@3.5.41(typescript@5.9.3))
+      '@ozjsey/v-keyboard-navigation':
+        specifier: ^0.1.0
+        version: 0.1.0(vue@3.5.41(typescript@5.9.3))
+      v-observe:
+        specifier: ^0.1.0
+        version: 0.1.0(vue@3.5.41(typescript@5.9.3))
+      v-scroll-into-view:
+        specifier: ^1.2.0
+        version: 1.2.0(vue@3.5.41(typescript@5.9.3))
+      v-select-text:
+        specifier: ^2.1.0
+        version: 2.1.0(vue@3.5.41(typescript@5.9.3))
+      v-teleport-to:
+        specifier: ^3.0.0
+        version: 3.0.0(vue@3.5.41(typescript@5.9.3))
       vue:
         specifier: ^3.5.13
         version: 3.5.41(typescript@5.9.3)
     devDependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.0
+        version: 6.20.3
       '@codemirror/commands':
         specifier: ^6.10.0
         version: 6.10.4
@@ -21,6 +48,12 @@ importers:
       '@codemirror/language':
         specifier: ^6.12.0
         version: 6.12.4
+      '@codemirror/lint':
+        specifier: ^6.8.0
+        version: 6.9.7
+      '@codemirror/search':
+        specifier: ^6.5.0
+        version: 6.7.1
       '@codemirror/state':
         specifier: ^6.7.0
         version: 6.7.1
@@ -30,6 +63,15 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.0
         version: 6.43.8
+      '@lezer/common':
+        specifier: ^1.2.3
+        version: 1.5.2
+      '@lezer/highlight':
+        specifier: ^1.2.1
+        version: 1.2.3
+      '@lezer/lr':
+        specifier: ^1.4.2
+        version: 1.4.10
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
@@ -302,6 +344,26 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
+
+  '@ozjsey/v-copy@1.1.0':
+    resolution: {integrity: sha512-MDBd7nQatEJRpfMD3+JN78FFxvDM1/k/aRDPGnf3kja+taHrMJ8DLiUj5YjBVXYhn4GEGUxbuDPWaasE0ub4nw==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-dropzone@0.1.0':
+    resolution: {integrity: sha512-oOOFYFz1HFghbKFRD4g8Lzxj2MyyivqffBxOijX1UodjM5ErcfvKVaUzoyOmVk7NvENOu+WUt+InsPxzWEvqnQ==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-fit-children@2.2.0':
+    resolution: {integrity: sha512-jPUhEeVkKZoaVCD45I8cwpPo/Gp7+CY3SCWsLAcs77AMKYR31g4aoJCpxgBaBZDf7cJ1y/B9l0h3pIvC0YJbhA==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-keyboard-navigation@0.1.0':
+    resolution: {integrity: sha512-KyrnBGcCimGENJqCOTOEjc+sa4b5dxu+3b4eudZO3Y2qx0iRlnohYgRXKr7Q7/BMMJkaf38h2WhqBW3QbaMN/g==}
+    peerDependencies:
+      vue: ^3.0.0
 
   '@rollup/rollup-android-arm-eabi@4.62.4':
     resolution: {integrity: sha512-RrPokAb7dmbxFoeO3TloqHyOjgye8RkBhSqmp4aJMIex4c9r46ZstPnleDQOq1t46VOVjwIuwNogIqbodV1Vvg==}
@@ -628,6 +690,26 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
+  v-observe@0.1.0:
+    resolution: {integrity: sha512-yCYQ+UaDohykq/8dXdaQ1O2bDYikKNNz78lh1Ev8+DojHmq/dXwvWr26lUu9exxb32eZ26VD7nGgiRQmAuMQuQ==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  v-scroll-into-view@1.2.0:
+    resolution: {integrity: sha512-HoRPbuhV+ckDrWIRw+2f9XExqjeg47hjjbymEcqzIPCKdfxSXMr3cZTQkdVhRpXytRFklDa/JMrW3588dpFnjA==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  v-select-text@2.1.0:
+    resolution: {integrity: sha512-uC6Kq+jve2KYkyc/jNTOpZX5IrPCC2jokNMYAmidb/M3kQIHEc1WyzW5z/WJtdcmbGEUWAA8dUlOKQjurDL8dg==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  v-teleport-to@3.0.0:
+    resolution: {integrity: sha512-1Uyxuiol+GXHU1m5abouHo9zPyMmPNQ8Gx1p5u5WGLLE6rsH9zqcGuO7C0sMMNp4zVI9DlCBHH9qUfsHrIiNsw==}
+    peerDependencies:
+      vue: ^3.0.0
+
   vite@6.4.3:
     resolution: {integrity: sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -919,6 +1001,22 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@ozjsey/v-copy@1.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-dropzone@0.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-fit-children@2.2.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-keyboard-navigation@0.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
 
   '@rollup/rollup-android-arm-eabi@4.62.4':
     optional: true
@@ -1260,6 +1358,22 @@ snapshots:
   typescript@5.9.3: {}
 
   undici-types@8.3.0: {}
+
+  v-observe@0.1.0(vue@3.5.41(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  v-scroll-into-view@1.2.0(vue@3.5.41(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  v-select-text@2.1.0(vue@3.5.41(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  v-teleport-to@3.0.0(vue@3.5.41(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
 
   vite@6.4.3(@types/node@26.2.0):
     dependencies:

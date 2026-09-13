@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DropzoneApi } from 'v-dropzone'
+import type { DropzoneApi } from '@ozjsey/v-dropzone'
 
 const dz = ref<DropzoneApi>()
 const done = ref<string[]>([])

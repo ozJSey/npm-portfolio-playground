@@ -21,14 +21,6 @@
       // type comparison fails. Mirrors `resolve.dedupe` in vite.config.ts.
       "vue": ["./node_modules/vue"],
       "vue/*": ["./node_modules/vue/*"],
-      "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
-      "v-dropzone": ["../v-dropzone/vDropzone.ts"],
-      "@ozjsey/v-fit-children": ["../v-fit-children/vFitChildren.ts"],
-      "v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
-      "v-observe": ["../v-observe/vObserve.ts"],
-      "v-scroll-into-view": ["../v-scroll-into-view/vScrollIntoView.ts"],
-      "v-select-text": ["../v-select-text/vSelectText.ts"],
-      "v-teleport-to": ["../v-teleport-to/vTeleportTo.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "scripts/**/*.mjs"]
