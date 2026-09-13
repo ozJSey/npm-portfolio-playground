@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-observe',
+  id: '@ozjsey/v-observe',
   tagline:
     'IntersectionObserver + ResizeObserver + MutationObserver behind one binding — with scroll-direction inference, per-threshold crossings, breakpoint brackets, semantic mutation diffs, and a single data-observe-state CSS hook.',
   status: 'v0.1.0 local — 189/189 tests, publish prep',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import { useTeleportTo } from 'v-teleport-to'
+import { useTeleportTo } from '@ozjsey/v-teleport-to'
 
 const open = ref(true)
 // The composable's second argument. Pass it and the fit test has something to

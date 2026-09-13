@@ -8,6 +8,8 @@
     "dev": "vite",
     "dev:dist": "PLAYGROUND_TARGET=dist vite",
     "build": "vite build",
+    "test:npm": "node scripts/npm-e2e.mjs",
+    "audit:npm": "pnpm audit --audit-level high",
     "preview": "vite preview",
     "smoke": "node scripts/smoke.mjs",
     "smoke:dist": "PLAYGROUND_TARGET=dist node scripts/smoke.mjs",
@@ -23,14 +25,16 @@
     ]
   },
   "dependencies": {
+    "@ozjsey/bigdecimal-string": "^1.1.0",
+    "@ozjsey/dependency-grouper": "^0.3.5",
     "@ozjsey/v-copy": "^1.1.0",
+    "@ozjsey/v-dropzone": "^0.1.0",
     "@ozjsey/v-fit-children": "^2.2.0",
     "@ozjsey/v-keyboard-navigation": "^0.1.0",
-    "@ozjsey/v-dropzone": "^0.1.0",
-    "v-observe": "^0.1.0",
-    "v-scroll-into-view": "^1.2.0",
-    "v-select-text": "^2.1.0",
-    "v-teleport-to": "^3.0.0",
+    "@ozjsey/v-observe": "^0.1.0",
+    "@ozjsey/v-scroll-into-view": "^1.2.0",
+    "@ozjsey/v-select-text": "^2.1.0",
+    "@ozjsey/v-teleport-to": "^3.0.0",
     "vue": "^3.5.13"
   },
   "devDependencies": {

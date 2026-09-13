@@ -1214,7 +1214,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: 'v-dropzone',
+  library: '@ozjsey/v-dropzone',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

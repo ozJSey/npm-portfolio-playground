@@ -1,7 +1,7 @@
 # Playground
 
 One page, one tab per v-\* library, every feature demoed — and every demo editable in the browser
-while it runs.
+while it runs. The source and deployment live in the [npm portfolio playground repository](https://github.com/ozJSey/npm-portfolio-playground).
 
 ```bash
 cd playground
@@ -26,6 +26,23 @@ artifacts consumers install.
 > unwrapped to `undefined`). `pnpm interactions` is what catches that class of failure — run it
 > before calling a card done. Layout-shaped libraries additionally need `pnpm geometry` plus a look
 > at a screenshot.
+
+## Portfolio packages
+
+The playground documents and exercises the Vue directive packages in their published scoped form:
+
+| Package | npm | Source repository |
+|---|---|---|
+| `@ozjsey/v-copy` | [npm](https://www.npmjs.com/package/@ozjsey/v-copy) | [GitHub](https://github.com/ozJSey/v-copy) |
+| `@ozjsey/v-dropzone` | [npm](https://www.npmjs.com/package/@ozjsey/v-dropzone) | [GitHub](https://github.com/ozJSey/v-dropzone) |
+| `@ozjsey/v-fit-children` | [npm](https://www.npmjs.com/package/@ozjsey/v-fit-children) | [GitHub](https://github.com/ozJSey/vue-fit-children) |
+| `@ozjsey/v-keyboard-navigation` | [npm](https://www.npmjs.com/package/@ozjsey/v-keyboard-navigation) | [GitHub](https://github.com/ozJSey/v-keyboard-navigation) |
+| `@ozjsey/v-observe` | [npm](https://www.npmjs.com/package/@ozjsey/v-observe) | [GitHub](https://github.com/ozJSey/v-observe) |
+| `@ozjsey/v-scroll-into-view` | [npm](https://www.npmjs.com/package/@ozjsey/v-scroll-into-view) | [GitHub](https://github.com/ozJSey/v-scroll-into-view) |
+| `@ozjsey/v-select-text` | [npm](https://www.npmjs.com/package/@ozjsey/v-select-text) | [GitHub](https://github.com/ozJSey/v-select-text) |
+| `@ozjsey/v-teleport-to` | [npm](https://www.npmjs.com/package/@ozjsey/v-teleport-to) | [GitHub](https://github.com/ozJSey/v-teleport-to) |
+
+The workspace also uses [`@ozjsey/dependency-grouper`](https://www.npmjs.com/package/@ozjsey/dependency-grouper) to keep shared dependency definitions coherent and [`@ozjsey/bigdecimal-string`](https://www.npmjs.com/package/@ozjsey/bigdecimal-string) for precise decimal formatting in package examples. Both are fetched by the daily npm verification job even though they do not need Vue directive tabs.
 
 ## What is in it
 

@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-dropzone',
+  id: '@ozjsey/v-dropzone',
   tagline:
     'The whole drag-drop pipeline in one binding: drop / paste / click-to-pick → validate → upload → state. No wrapper components, no enter/leave counter to write, no XHR plumbing.',
   status: 'v0.1.0 local — 330/330 tests, publish prep',
@@ -21,7 +21,7 @@ const manifest: LibraryManifest = {
       title: 'Drop files (or click)',
       blurb:
         'The bare handler form. Four events, the dragleave-on-child bug, and preventDefault are all handled — and because clickToPick defaults to on, the same one-line binding also browses on click and on Tab + Enter.',
-      tags: ['v-dropzone', 'data-dropzone', 'DropzoneHandler', 'clickToPick default'],
+      tags: ['@ozjsey/v-dropzone', 'data-dropzone', 'DropzoneHandler', 'clickToPick default'],
     },
     {
       file: '02-validation.vue',

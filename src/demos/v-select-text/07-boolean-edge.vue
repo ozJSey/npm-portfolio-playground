@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { SelectTextBinding } from 'v-select-text'
+import type { SelectTextBinding } from '@ozjsey/v-select-text'
 
 const enabled = ref(false)
 const useAlias = ref(false)

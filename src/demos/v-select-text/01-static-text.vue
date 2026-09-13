@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 // `v-select-text` with no value at all already means "select on mount". The
 // ref only exists so the button can push `enabled` back through a

@@ -4,16 +4,16 @@ import vue from '@vitejs/plugin-vue'
 
 const pkg = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
-const LIBRARIES = [
-  '@ozjsey/v-copy',
-  '@ozjsey/v-dropzone',
-  '@ozjsey/v-fit-children',
-  '@ozjsey/v-keyboard-navigation',
-  'v-observe',
-  'v-scroll-into-view',
-  'v-select-text',
-  'v-teleport-to',
-] as const
+const LIBRARIES = {
+  '@ozjsey/v-copy': { dir: 'v-copy', entry: 'vCopy.ts' },
+  '@ozjsey/v-dropzone': { dir: 'v-dropzone', entry: 'vDropzone.ts' },
+  '@ozjsey/v-fit-children': { dir: 'v-fit-children', entry: 'vFitChildren.ts' },
+  '@ozjsey/v-keyboard-navigation': { dir: 'v-keyboard-navigation', entry: 'vKeyboardNavigation.ts' },
+  '@ozjsey/v-observe': { dir: 'v-observe', entry: 'vObserve.ts' },
+  '@ozjsey/v-scroll-into-view': { dir: 'v-scroll-into-view', entry: 'vScrollIntoView.ts' },
+  '@ozjsey/v-select-text': { dir: 'v-select-text', entry: 'vSelectText.ts' },
+  '@ozjsey/v-teleport-to': { dir: 'v-teleport-to', entry: 'vTeleportTo.ts' },
+} as const
 
 const TARGET = process.env.PLAYGROUND_TARGET === 'dist' ? 'dist' : 'src'
 

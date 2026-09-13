@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useTemplateRef } from 'vue'
-import { useScrollIntoView } from 'v-scroll-into-view'
+import { useScrollIntoView } from '@ozjsey/v-scroll-into-view'
 
 const sectionRef = useTemplateRef<HTMLElement>('section')
 

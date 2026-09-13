@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type { SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 // The most ordinary shape there is: a bare binding on a host whose text has
 // not arrived yet. Until SEL-4 this fired ONE event claiming `text: ""`, wiped

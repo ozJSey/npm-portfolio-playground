@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { MutateEvent, MutateEventType } from 'v-observe'
+import type { MutateEvent, MutateEventType } from '@ozjsey/v-observe'
 
 const subscription = ref<MutateEventType>('attr:class')
 const theme = ref('light')

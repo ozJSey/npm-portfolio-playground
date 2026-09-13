@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { MutateEvent, ResizeEvent } from 'v-observe'
+import type { MutateEvent, ResizeEvent } from '@ozjsey/v-observe'
 
 const scroller = useTemplateRef<HTMLElement>('scroller')
 const host = useTemplateRef<HTMLElement>('host')

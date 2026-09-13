@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import type { TeleportToEventDetail } from 'v-teleport-to'
+import type { TeleportToEventDetail } from '@ozjsey/v-teleport-to'
 
 const overflow = ref<'none' | 'shift' | 'hide'>('shift')
 const placement = ref<'bottom' | 'right'>('bottom')

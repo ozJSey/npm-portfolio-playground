@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, shallowRef } from 'vue'
-import type { VirtualReference } from 'v-teleport-to'
+import type { VirtualReference } from '@ozjsey/v-teleport-to'
 
 const open = ref(false)
 // Any object with getBoundingClientRect() is a valid reference — cursor

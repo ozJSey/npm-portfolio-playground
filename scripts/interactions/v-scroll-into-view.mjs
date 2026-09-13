@@ -528,7 +528,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: 'v-scroll-into-view',
+  library: '@ozjsey/v-scroll-into-view',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { MutateEvent } from 'v-observe'
+import type { MutateEvent } from '@ozjsey/v-observe'
 
 const debounce = ref(0)
 const log = ref<string[]>([])

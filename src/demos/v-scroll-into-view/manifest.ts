@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-scroll-into-view',
+  id: '@ozjsey/v-scroll-into-view',
   tagline:
     'scrollIntoView() driven by a reactive condition — with edge detection, a pinned scroll container, and sticky-header offsets the native API leaves to you.',
   status: 'v1.2.0 local — 272/272 tests across 5 workspaces, publish prep',

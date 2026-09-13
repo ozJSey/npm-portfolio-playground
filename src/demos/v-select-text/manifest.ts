@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-select-text',
+  id: '@ozjsey/v-select-text',
   tagline:
     'Reactive text selection for any element — select a paragraph, a range across nested markup, or the part that matches a pattern, on a false → true transition or on click. Inputs, textareas and contenteditable come along for the ride.',
   status: 'v2.1.0 local — copy-on-select landed, first publish pending',
@@ -21,7 +21,7 @@ const manifest: LibraryManifest = {
       file: '01-static-text.vue',
       title: 'Static text — the point of the directive',
       blurb: 'A plain paragraph selects its own rendered text on mount, across nested markup, with no contenteditable and no focus.',
-      tags: ['v-select-text', "kind: 'text'", 'Range API', 'mount'],
+      tags: ['@ozjsey/v-select-text', "kind: 'text'", 'Range API', 'mount'],
     },
     {
       file: '02-match.vue',

@@ -20,7 +20,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
-const TAB = process.argv[2] ?? 'v-fit-children'
+const TAB = process.argv[2] ?? '@ozjsey/v-fit-children'
 const PORT = Number(process.env.PORT ?? 5174)
 const DEBUG_PORT = 9334
 

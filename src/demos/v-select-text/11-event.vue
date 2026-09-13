@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import type { SelectTextEventDetail, SelectTextOptions } from 'v-select-text'
+import type { SelectTextEventDetail, SelectTextOptions } from '@ozjsey/v-select-text'
 
 const direction = ref<NonNullable<SelectTextOptions['direction']>>('forward')
 

@@ -194,7 +194,7 @@ const CHECKS = [
     fn: async () => {
       const token = __st.stage('04-click-to-select.vue').querySelectorAll('code.token')[3]
       await __st.press(token)
-      return { pass: __st.sel() === 'v-select-text', detail: `"${__st.sel()}"` }
+      return { pass: __st.sel() === '@ozjsey/v-select-text', detail: `"${__st.sel()}"` }
     },
   },
   {
@@ -641,7 +641,7 @@ const NATIVE_CHECKS = [
       const sel = await ctx.page.evaluate(`(window.getSelection()?.toString() ?? '')`)
       const clip = await readClipboard(ctx)
       return {
-        pass: clip === 'v-select-text' && sel === 'v-select-text',
+        pass: clip === '@ozjsey/v-select-text' && sel === '@ozjsey/v-select-text',
         detail: `clipboard=${JSON.stringify(clip)} selection=${JSON.stringify(sel)}`,
       }
     },
@@ -815,7 +815,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: 'v-select-text',
+  library: '@ozjsey/v-select-text',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

@@ -580,7 +580,7 @@ const CHECKS = [
 ]
 
 export default {
-  library: 'v-keyboard-navigation',
+  library: '@ozjsey/v-keyboard-navigation',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

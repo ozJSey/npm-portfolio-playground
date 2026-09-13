@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-teleport-to',
+  id: '@ozjsey/v-teleport-to',
   tagline:
     'Viewport-aware fixed positioning relative to a reference element — dropdowns, popovers and autocompletes that escape every overflow and clip container without a wrapper component.',
   status: 'v3.0.0 local — 806/806 tests; the fit test now runs on the default binding (TT-15)',

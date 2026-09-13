@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { IntersectEvent } from 'v-observe'
+import type { IntersectEvent } from '@ozjsey/v-observe'
 
 const last = ref<string>('—')
 const reveal = ref<'from-below' | 'from-above' | null>(null)

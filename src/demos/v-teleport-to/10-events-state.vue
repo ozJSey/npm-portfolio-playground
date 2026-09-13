@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import type { TeleportToEventDetail } from 'v-teleport-to'
+import type { TeleportToEventDetail } from '@ozjsey/v-teleport-to'
 
 const open = ref(true)
 const log = ref<string[]>([])

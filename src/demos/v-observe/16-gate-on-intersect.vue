@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted, ref, useTemplateRef } from 'vue'
-import type { MutateEvent, ResizeEvent } from 'v-observe'
+import type { MutateEvent, ResizeEvent } from '@ozjsey/v-observe'
 
 const gate = ref(true)
 const mutations = ref(0)

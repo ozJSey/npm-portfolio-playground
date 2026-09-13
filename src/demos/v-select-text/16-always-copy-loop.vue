@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextCopyDetail } from 'v-select-text'
+import type { SelectTextCopyDetail } from '@ozjsey/v-select-text'
 
 // SEL-5. `trigger: 'always'` + `copy: true` + a handler that writes state is a
 // cycle: the copy settles in a promise, the handler re-renders, `'always'`

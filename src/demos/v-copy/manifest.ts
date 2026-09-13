@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-copy',
+  id: '@ozjsey/v-copy',
   tagline:
     'Make any element copyable. Click a <li>, a <code>, a table cell — its text is on the clipboard. Plus copy history, a "Copied!" state, keyboard + screen-reader support, and an automatic clipboard fallback, all from one binding.',
   status: '1.1.0 — renamed to @ozjsey/v-copy, ready to publish (the unscoped name is squatted)',
@@ -14,7 +14,7 @@ const manifest: LibraryManifest = {
       file: '01-bare.vue',
       title: 'Bare binding — copy textContent',
       blurb: 'Click any address. No config, no handler; the element is the source.',
-      tags: ['v-copy', 'textContent', 'data-copied'],
+      tags: ['@ozjsey/v-copy', 'textContent', 'data-copied'],
     },
     {
       file: '02-source-override.vue',
@@ -92,7 +92,7 @@ const manifest: LibraryManifest = {
       blurb:
         'The reason the package exists: copy a few values, open the history in a teleported dropdown, pick one and it goes back on the clipboard — and jumps to the top. Toggle dedupe to watch history and attempts diverge.',
       tags: ['dedupe', 'compare', 'CopyController', 'sink', 'max', '.rich', 'copy-result'],
-      uses: ['v-teleport-to'],
+      uses: ['@ozjsey/v-teleport-to'],
     },
     {
       file: '14-nothing-to-copy.vue',

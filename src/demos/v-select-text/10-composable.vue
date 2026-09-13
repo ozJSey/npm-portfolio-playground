@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import { useSelectText } from 'v-select-text'
-import type { SelectTextEventDetail } from 'v-select-text'
+import { useSelectText } from '@ozjsey/v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 const field = useTemplateRef<HTMLTextAreaElement>('field')
 const quote = useTemplateRef<HTMLElement>('quote')

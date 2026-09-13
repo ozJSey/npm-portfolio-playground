@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 // Multi-line, source-indented text — a template literal, a markdown blob, a
 // description field off an API. The browser paints it as one collapsed line;
@@ -39,7 +39,7 @@ function fireBoth() {
 // the source string line up 1:1 with the characters the browser paints, so
 // indexOf is enough to select a whole line, indentation included.
 const snippet = `{
-  "name": "v-select-text",
+  "name": "@ozjsey/v-select-text",
   "version": "2.0.0"
 }`
 const versionLine = '  "version": "2.0.0"'

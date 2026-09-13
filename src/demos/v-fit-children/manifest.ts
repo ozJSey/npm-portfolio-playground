@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-fit-children',
+  id: '@ozjsey/v-fit-children',
   tagline:
     'Hide the children that do not fit on one row and hand you the ones you lost — count, elements, indices, and the matching data objects — so a "+N more" badge is three lines instead of a resize-observer project.',
   status: 'Published — 2.1.0 on npm (owner ozjsey); 3.0 engine built locally, not yet published',
@@ -16,7 +16,7 @@ const manifest: LibraryManifest = {
       file: '01-basic.vue',
       title: 'Chips with a +N more badge',
       blurb: 'The canonical case. Narrow the container and watch children drop out of the row.',
-      tags: ['v-fit-children', 'offsetNeededInPx', '@fit-children-updated'],
+      tags: ['@ozjsey/v-fit-children', 'offsetNeededInPx', '@fit-children-updated'],
     },
     {
       file: '02-data-mapping.vue',

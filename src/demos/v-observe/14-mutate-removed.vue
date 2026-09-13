@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { MutateEvent } from 'v-observe'
+import type { MutateEvent } from '@ozjsey/v-observe'
 
 const status = ref('mounted — chart instance alive')
 const gone = ref(false)

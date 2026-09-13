@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, useTemplateRef } from 'vue'
-import type { TeleportToEventDetail } from 'v-teleport-to'
+import type { TeleportToEventDetail } from '@ozjsey/v-teleport-to'
 
 type Placement = 'auto' | 'top' | 'bottom' | 'left' | 'right'
 

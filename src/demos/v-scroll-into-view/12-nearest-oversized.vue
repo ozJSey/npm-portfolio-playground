@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { VScrollIntoViewOptions } from 'v-scroll-into-view'
+import type { VScrollIntoViewOptions } from '@ozjsey/v-scroll-into-view'
 
 const size = ref(400)
 const offsetTop = ref(0)

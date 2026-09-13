@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 const enabled = ref(true)
 const lastText = ref<string | null>(null)
@@ -42,7 +42,7 @@ function onSelectText(e: Event) {
         <code
           class="token"
           v-select-text="{ enabled, trigger: 'click' }"
-        >npm install v-select-text</code>
+        >npm install @ozjsey/v-select-text</code>
       </div>
 
       <div class="pg-row">
@@ -50,7 +50,7 @@ function onSelectText(e: Event) {
         <code
           class="token"
           v-select-text="{ enabled, trigger: 'click', match: packageName }"
-        >npm install v-select-text</code>
+        >npm install @ozjsey/v-select-text</code>
         <span class="pg-muted">selects only what <code>/v-[a-z-]+$/</code> matched</span>
       </div>
     </div>

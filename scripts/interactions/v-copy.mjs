@@ -266,6 +266,6 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: 'v-copy',
+  library: '@ozjsey/v-copy',
   nativeChecks: NATIVE_CHECKS,
 }

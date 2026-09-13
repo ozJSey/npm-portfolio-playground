@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextCopyDetail, SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextCopyDetail, SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 // `copy: true` writes exactly `detail.text` — the same string the select-text
 // event reports. `trigger: 'click'` is what makes the write legal: a clipboard
@@ -67,7 +67,7 @@ async function readClipboard() {
         <code
           class="token"
           v-select-text="{ trigger: 'click', copy: copyOn, match: packageName }"
-        >npm install v-select-text</code>
+        >npm install @ozjsey/v-select-text</code>
         <span class="pg-muted">only the part <code>/v-[a-z-]+$/</code> matched is copied</span>
       </div>
 

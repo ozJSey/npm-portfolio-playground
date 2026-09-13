@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { ResizeBox, ResizeEvent } from 'v-observe'
+import type { ResizeBox, ResizeEvent } from '@ozjsey/v-observe'
 
 const box = ref<ResizeBox>('border')
 const dpr = Math.round(window.devicePixelRatio * 100) / 100

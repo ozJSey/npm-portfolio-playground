@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { IntersectEvent } from 'v-observe'
+import type { IntersectEvent } from '@ozjsey/v-observe'
 
 const margin = ref(120)
 const eager = ref(false)

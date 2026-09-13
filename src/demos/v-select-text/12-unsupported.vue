@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { SelectTextEventDetail } from 'v-select-text'
+import type { SelectTextEventDetail } from '@ozjsey/v-select-text'
 
 const divEnabled = ref(false)
 const hiddenEnabled = ref(false)

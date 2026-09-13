@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue'
-import type { SelectTextCopyDetail } from 'v-select-text'
+import type { SelectTextCopyDetail } from '@ozjsey/v-select-text'
 
 // The activation rule, MEASURED rather than repeated.
 //

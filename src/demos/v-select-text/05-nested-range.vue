@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
-import type { SelectTextEventDetail, SelectTextOptions } from 'v-select-text'
+import type { SelectTextEventDetail, SelectTextOptions } from '@ozjsey/v-select-text'
 
 const start = ref(13)
 const end = ref(53)

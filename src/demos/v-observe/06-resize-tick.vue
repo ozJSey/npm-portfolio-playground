@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { ResizeEvent } from 'v-observe'
+import type { ResizeEvent } from '@ozjsey/v-observe'
 
 const size = ref({ width: 0, height: 0 })
 const delta = ref({ width: 0, height: 0 })

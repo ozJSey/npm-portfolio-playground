@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { ResizeEvent } from 'v-observe'
+import type { ResizeEvent } from '@ozjsey/v-observe'
 
 const tolerance = ref(0.08)
 const current = ref('—')

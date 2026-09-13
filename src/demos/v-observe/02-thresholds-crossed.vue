@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { IntersectCrossEvent } from 'v-observe'
+import type { IntersectCrossEvent } from '@ozjsey/v-observe'
 
 const log = ref<string[]>([])
 const pages = ref(1)

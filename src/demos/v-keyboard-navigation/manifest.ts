@@ -1,7 +1,7 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: 'v-keyboard-navigation',
+  id: '@ozjsey/v-keyboard-navigation',
   tagline:
     'One tab stop for a group of controls — roving tabindex, arrows, typeahead, a real PageUp/PageDown, and the controlled scroll the browser gets wrong.',
   status: 'v0.1.0 local, unpublished — 99 tests across 2 workspaces, 21 browser checks',

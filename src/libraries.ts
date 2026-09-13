@@ -16,13 +16,13 @@ import type { App, Directive, Plugin } from 'vue'
 import * as Vue from 'vue'
 
 import * as vCopyModule from '@ozjsey/v-copy'
-import * as vFitChildrenModule from '@ozjsey/v-fit-children'
 import * as vDropzoneModule from '@ozjsey/v-dropzone'
+import * as vFitChildrenModule from '@ozjsey/v-fit-children'
 import * as vKeyboardNavigationModule from '@ozjsey/v-keyboard-navigation'
-import * as vObserveModule from 'v-observe'
-import * as vScrollIntoViewModule from 'v-scroll-into-view'
-import * as vSelectTextModule from 'v-select-text'
-import * as vTeleportToModule from 'v-teleport-to'
+import * as vObserveModule from '@ozjsey/v-observe'
+import * as vScrollIntoViewModule from '@ozjsey/v-scroll-into-view'
+import * as vSelectTextModule from '@ozjsey/v-select-text'
+import * as vTeleportToModule from '@ozjsey/v-teleport-to' 
 
 export const LIBRARY_MODULES: Record<string, unknown> = {
   vue: Vue,
@@ -30,10 +30,10 @@ export const LIBRARY_MODULES: Record<string, unknown> = {
   '@ozjsey/v-dropzone': vDropzoneModule,
   '@ozjsey/v-fit-children': vFitChildrenModule,
   '@ozjsey/v-keyboard-navigation': vKeyboardNavigationModule,
-  'v-observe': vObserveModule,
-  'v-scroll-into-view': vScrollIntoViewModule,
-  'v-select-text': vSelectTextModule,
-  'v-teleport-to': vTeleportToModule,
+  '@ozjsey/v-observe': vObserveModule,
+  '@ozjsey/v-scroll-into-view': vScrollIntoViewModule,
+  '@ozjsey/v-select-text': vSelectTextModule,
+  '@ozjsey/v-teleport-to': vTeleportToModule,
 }
 
 interface Install {
@@ -79,25 +79,25 @@ const INSTALLS: Install[] = [
   },
   {
     name: 'observe',
-    specifier: 'v-observe',
+    specifier: '@ozjsey/v-observe',
     plugin: vObserveModule.ObservePlugin,
     directive: vObserveModule.vObserve,
   },
   {
     name: 'scroll-into-view',
-    specifier: 'v-scroll-into-view',
+    specifier: '@ozjsey/v-scroll-into-view',
     plugin: vScrollIntoViewModule.ScrollIntoViewPlugin,
     directive: vScrollIntoViewModule.vScrollIntoView,
   },
   {
     name: 'select-text',
-    specifier: 'v-select-text',
+    specifier: '@ozjsey/v-select-text',
     plugin: vSelectTextModule.SelectTextPlugin,
     directive: vSelectTextModule.vSelectText,
   },
   {
     name: 'teleport-to',
-    specifier: 'v-teleport-to',
+    specifier: '@ozjsey/v-teleport-to',
     plugin: vTeleportToModule.TeleportToPlugin,
     directive: vTeleportToModule.vTeleportTo,
   },

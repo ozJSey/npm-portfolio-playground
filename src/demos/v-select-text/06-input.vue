@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
-import type { SelectTextEventDetail, SelectTextOptions } from 'v-select-text'
+import type { SelectTextEventDetail, SelectTextOptions } from '@ozjsey/v-select-text'
 
 const log = ref<string[]>([])
 
