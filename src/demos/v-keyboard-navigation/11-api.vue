@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { KeyboardNavigationApi } from 'v-keyboard-navigation'
+import type { KeyboardNavigationApi } from '@ozjsey/v-keyboard-navigation'
 
 const nav = ref<KeyboardNavigationApi>()
 const enabled = ref(true)

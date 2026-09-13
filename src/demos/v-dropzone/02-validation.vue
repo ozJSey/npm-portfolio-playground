@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DropzoneRejectEvent } from 'v-dropzone'
+import type { DropzoneRejectEvent } from '@ozjsey/v-dropzone'
 
 const accept = ref('image/*,.pdf')
 const maxSizeKb = ref(500)

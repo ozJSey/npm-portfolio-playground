@@ -9,17 +9,16 @@
  *      resolves to the exact same module instance (no duplicate directives,
  *      no duplicate Vue).
  *
- * Every specifier below is aliased in `vite.config.ts` — to the library's
- * TypeScript source by default, or to its built `dist/` entry when the server
- * runs with `PLAYGROUND_TARGET=dist`.
+ * Every specifier below is resolved from the published npm package installed
+ * in this project.
  */
 import type { App, Directive, Plugin } from 'vue'
 import * as Vue from 'vue'
 
 import * as vCopyModule from '@ozjsey/v-copy'
-import * as vDropzoneModule from 'v-dropzone'
 import * as vFitChildrenModule from '@ozjsey/v-fit-children'
-import * as vKeyboardNavigationModule from 'v-keyboard-navigation'
+import * as vDropzoneModule from '@ozjsey/v-dropzone'
+import * as vKeyboardNavigationModule from '@ozjsey/v-keyboard-navigation'
 import * as vObserveModule from 'v-observe'
 import * as vScrollIntoViewModule from 'v-scroll-into-view'
 import * as vSelectTextModule from 'v-select-text'
@@ -28,9 +27,9 @@ import * as vTeleportToModule from 'v-teleport-to'
 export const LIBRARY_MODULES: Record<string, unknown> = {
   vue: Vue,
   '@ozjsey/v-copy': vCopyModule,
-  'v-dropzone': vDropzoneModule,
+  '@ozjsey/v-dropzone': vDropzoneModule,
   '@ozjsey/v-fit-children': vFitChildrenModule,
-  'v-keyboard-navigation': vKeyboardNavigationModule,
+  '@ozjsey/v-keyboard-navigation': vKeyboardNavigationModule,
   'v-observe': vObserveModule,
   'v-scroll-into-view': vScrollIntoViewModule,
   'v-select-text': vSelectTextModule,
@@ -60,7 +59,7 @@ const INSTALLS: Install[] = [
   },
   {
     name: 'dropzone',
-    specifier: 'v-dropzone',
+    specifier: '@ozjsey/v-dropzone',
     plugin: vDropzoneModule.DropzonePlugin,
     directive: vDropzoneModule.vDropzone,
   },
@@ -74,7 +73,7 @@ const INSTALLS: Install[] = [
   },
   {
     name: 'keyboard-navigation',
-    specifier: 'v-keyboard-navigation',
+    specifier: '@ozjsey/v-keyboard-navigation',
     plugin: vKeyboardNavigationModule.KeyboardNavigationPlugin,
     directive: vKeyboardNavigationModule.vKeyboardNavigation,
   },

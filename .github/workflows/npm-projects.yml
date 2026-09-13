@@ -1,0 +1,55 @@
+name: Test npm projects
+
+on:
+  schedule:
+    - cron: '0 0,8,16 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: dependency-grouper
+            repository: ozjsey/dependency-grouper
+          - package: bigdecimal-string
+            repository: ozjsey/big_decimal_string
+          - package: vue-write-behind
+            repository: ozjsey/vue-write-behind
+          - package: '@ozjsey/v-copy'
+            repository: ozjsey/vue-copy
+          - package: '@ozjsey/v-fit-children'
+            repository: ozjsey/vue-fit-children
+          - package: '@ozjsey/v-keyboard-navigation'
+            repository: ozjsey/vue-keyboard-navigation
+          - package: v-observe
+            repository: ozjsey/vue-observe
+          - package: v-scroll-into-view
+            repository: ozjsey/vue-scroll-into-view
+          - package: v-select-text
+            repository: ozjsey/vue-select-text
+          - package: v-teleport-to
+            repository: ozjsey/vue-teleport-to
+          - package: '@ozjsey/v-dropzone'
+            repository: ozjsey/vue-dropzone
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repository }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm view "${{ matrix.package }}@latest" version
+      - run: npm pack "${{ matrix.package }}@latest" --dry-run
+      - run: npm audit --audit-level=high
+      - run: npm test --if-present

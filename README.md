@@ -6,21 +6,17 @@ while it runs.
 ```bash
 cd playground
 pnpm install
-pnpm dev             # http://localhost:5173 — library SOURCES, hot-reload
-pnpm dev:dist        # same app, but importing each package's built dist/ entry
+pnpm dev             # http://localhost:5173 — published npm packages
 ```
 
-In the default mode every library is aliased to its **TypeScript source**, so editing
-`../v-observe/vObserve.ts` hot-reloads the page — the playground doubles as a continuous smoke test
-of the real sources. `dev:dist` flips every alias to whatever each `package.json` `module`/`main`
-points at: the consumer's view, and an instant detector of a stale `dist/`. The header shows which
-mode is active.
+Every library is loaded from its published npm package, so a clean checkout exercises the same
+artifacts consumers install.
 
 | Script | What it does |
 |---|---|
-| `pnpm dev` / `pnpm dev:dist` | Dev server against sources (HMR) / against built dist entries |
-| `pnpm smoke` / `pnpm smoke:dist` | Boots the server, renders every tab in headless Chrome twice — once plain, once with every editor open (`?editors=open`) — and fails on any compile or runtime error. Zero dependencies; uses a Chrome it can find, or `CHROME_PATH` |
-| `pnpm interactions` / `pnpm interactions:dist` | Drives every card through CDP in a real Chrome — drops, pastes, picks, uploads, cancels — and asserts on what the page shows afterwards. **This is the check that proves a demo works**, as opposed to merely compiling. `ONLY=07-api pnpm interactions` narrows it to one card |
+| `pnpm dev` | Dev server using the published npm packages |
+| `pnpm smoke` | Boots the server and renders every tab in headless Chrome twice |
+| `pnpm interactions` | Drives every card through CDP in a real Chrome and asserts on the resulting UI |
 | `pnpm typecheck` | `vue-tsc` over the playground **and** every demo SFC |
 | `pnpm build` | Static production build into `dist/` |
 
@@ -69,27 +65,11 @@ Press **Edit code** on any card. The editor holds the real `.vue` file; typing r
 - `?editors=open` in the URL mounts every card with its editor already open — that is what the
   smoke test's second pass uses.
 
-## Dist mode
+## CI and GitHub Pages
 
-`PLAYGROUND_TARGET=dist` (what `dev:dist` / `smoke:dist` set) resolves every library import to its
-built entry instead of its source — the exact modules a consumer gets. Use it to answer "does the
-*artifact* still work", the question `v-copy-test` answers for one package via its packed tarball.
-
-**Nothing here falls back to source.** It used to, quietly, and that is PG-15: the alias key for a
-scoped package is its npm name (`@ozjsey/v-fit-children`), the old resolver read
-`../<alias-key>/package.json`, and the lookup missed — so `PLAYGROUND_TARGET=dist` had never once
-loaded the built artifact of the only package in this portfolio that is actually published, while
-`smoke:dist` reported green. The alias key and the directory on disk are now two separate columns in
-`vite.config.ts`'s `LIBRARIES` table, and resolution goes through the directory.
-
-- A package whose `package.json` is missing, unreadable, or declares no `module`/`main`, or whose
-  entry file is not on disk, **throws at config load** and names the package. The dev server does
-  not start.
-- A dist that loads but is stale or broken — no directive, no hooks on it, or missing the plugin the
-  package is supposed to export — is a **boot failure**: `installLibraries()` throws, `src/main.ts`
-  paints the reason over the page, and `smoke:dist` reports it. Proven by replacing
-  `v-fit-children/dist/vFitChildren.min.js` with a stub: before this change the run was green.
-- Typecheck always runs against sources — dist mode is a runtime concern.
+The `Test npm projects` workflow runs three times daily at 00:00, 08:00, and 16:00 UTC. It installs
+each related project, runs `npm audit`, and executes its tests. The Pages workflow builds this
+playground on pushes to `main` and publishes `dist/` to GitHub Pages.
 
 ## Adding an interaction spec
 
@@ -134,9 +114,9 @@ reads as "verified" while five libraries have never been driven. A library with 
 That is all — the registry globs both. A manifest entry with no file, or a file in no manifest, is
 reported as a banner at the top of the tab rather than silently ignored.
 
-Adding a whole library is the same shape: create `src/demos/<package>/manifest.ts`, add the package
-to `LIBRARY_SOURCES` in `vite.config.ts`, to `LIBRARY_MODULES` + the `INSTALLS` list in
-`src/libraries.ts`, and to `paths` in `tsconfig.json`.
+Adding a whole library is the same shape: publish the package, add it to `package.json`, create
+`src/demos/<package>/manifest.ts`, and add it to `LIBRARIES` in `vite.config.ts`,
+`LIBRARY_MODULES` + the `INSTALLS` list in `src/libraries.ts`.
 
 ## House rules for demo files
 
@@ -198,9 +178,8 @@ Four details matter:
   the two versions match and refuses to boot otherwise; `smoke` and `interactions` assert it from
   outside the page. Read `src/sfc/versions.ts` before changing any of this.
 
-- **One Vue instance.** Each sibling package has its own `node_modules/vue`. `resolve.dedupe` plus an
-  exact `^vue$` alias in `vite.config.ts` (and a matching `paths` entry in `tsconfig.json`) force
-  every import — playground, library sources, and dynamically compiled demos — onto the same copy.
+- **One Vue instance.** `resolve.dedupe` plus an exact `^vue$` alias in `vite.config.ts` force every
+  import — playground, npm packages, and dynamically compiled demos — onto the same copy.
   Without that, reactivity silently breaks across the boundary.
 - **One CodeMirror instance.** A second copy of `@codemirror/state` breaks the `instanceof` checks
   inside the extension resolver ("Unrecognized extension value in extension set"). The whole
@@ -213,11 +192,11 @@ Four details matter:
   design), so the playground is also a check that the install path in each README works. A package
   that loads without a usable directive — or without the plugin it is supposed to export — is a
   **boot failure**, not a fallback. It used to register the directive directly and boot anyway,
-  which meant a broken `dist/` could render all 97 cards and report `smoke:dist` green.
+  which meant a broken package could render all 97 cards and report the smoke test green.
 
 ## Relationship to the per-package `playground.html` files
 
 Several packages still ship a standalone `playground.html` that some `playground.smoke.test.ts`
 suites mirror. Those stay: they are per-package artifacts, and they prove the library works with
-nothing but an import map. This project is the cross-package one — broader coverage, live editing,
-source-level HMR, and the dist-mode consumer check.
+nothing but an import map. This project is the cross-package one — broader coverage and live editing
+against the published consumer artifacts.
