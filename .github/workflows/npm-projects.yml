@@ -52,5 +52,7 @@ jobs:
       - run: npm install
       - run: npm view "${{ matrix.package }}@latest" version
       - run: npm pack "${{ matrix.package }}@latest" --dry-run
-      - run: npm audit --audit-level=high
+      # Audit the published runtime dependency surface. The checked-out
+      # projects' dev toolchains are not part of the npm package consumers get.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test --if-present
