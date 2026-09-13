@@ -1,10 +1,36 @@
 import { fileURLToPath } from 'node:url'
+import { existsSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 const pkg = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
-const LIBRARIES = {
+/**
+ * npm specifier → where that package lives on disk.
+ *
+ *   dir    the sibling folder, which is also the playground tab id
+ *   entry  the source entry, relative to `dir`
+ *   dist   the built entry, when it is not `dist/<entry with .min.js>`
+ *
+ * `dist` exists because not every package puts its entry at the top level:
+ * `bigdecimal-string` is `src/index.ts` → `dist/index.min.js`, and deriving
+ * one from the other would ask for `dist/src/index.min.js`.
+ */
+interface LibraryLocation {
+  dir: string
+  entry: string
+  dist?: string
+}
+
+const LIBRARIES: Record<string, LibraryLocation> = {
+  // Not a directive and not even Vue — a plain TypeScript class. It is aliased
+  // exactly like the others so its tab compiles the local source, and it has no
+  // entry in `src/libraries.ts` INSTALLS because there is nothing to register.
+  '@ozjsey/bigdecimal-string': {
+    dir: 'bigdecimal-string',
+    entry: 'src/index.ts',
+    dist: 'dist/index.min.mjs',
+  },
   '@ozjsey/v-copy': { dir: 'v-copy', entry: 'vCopy.ts' },
   '@ozjsey/v-dropzone': { dir: 'v-dropzone', entry: 'vDropzone.ts' },
   '@ozjsey/v-fit-children': { dir: 'v-fit-children', entry: 'vFitChildren.ts' },
@@ -13,13 +39,22 @@ const LIBRARIES = {
   '@ozjsey/v-scroll-into-view': { dir: 'v-scroll-into-view', entry: 'vScrollIntoView.ts' },
   '@ozjsey/v-select-text': { dir: 'v-select-text', entry: 'vSelectText.ts' },
   '@ozjsey/v-teleport-to': { dir: 'v-teleport-to', entry: 'vTeleportTo.ts' },
-} as const
+  // Composable, not a directive — the alias mechanism does not care, but
+  // `src/libraries.ts` does: it has no entry in INSTALLS. See the note there.
+  '@ozjsey/vue-write-behind': { dir: 'vue-write-behind', entry: 'vueWriteBehind.ts' },
+}
 
 const TARGET = process.env.PLAYGROUND_TARGET === 'dist' ? 'dist' : 'src'
-const LIBRARY_ALIASES = Object.entries(LIBRARIES).map(([specifier, library]) => ({
+const entryFor = (library: LibraryLocation) =>
+  TARGET === 'dist'
+    ? (library.dist ?? `dist/${library.entry.replace('.ts', '.min.js')}`)
+    : library.entry
+const LIBRARY_ALIASES = Object.entries(LIBRARIES)
+  .filter(([, library]) => !process.env.GITHUB_ACTIONS && existsSync(pkg(`../${library.dir}`)))
+  .map(([specifier, library]) => ({
   find: new RegExp(`^${specifier.replace('/', '\\/')}$`),
-  replacement: pkg(`../${library.dir}/${TARGET === 'dist' ? `dist/${library.entry.replace('.ts', '.min.js')}` : library.entry}`),
-}))
+  replacement: pkg(`../${library.dir}/${entryFor(library)}`),
+  }))
 
 /**
  * Upload endpoints for the `v-dropzone` tab. XHR progress events only fire
@@ -98,6 +133,11 @@ export default defineConfig({
       // Exact match only — a string alias would also rewrite `vue/compiler-sfc`.
       { find: /^vue$/, replacement: pkg('./node_modules/vue/dist/vue.runtime.esm-bundler.js') },
       { find: '@', replacement: pkg('./src') },
+      // @ozjsey/bigdecimal-string@1.1.0 was published without an `import`
+      // condition; point Vite at its published ESM file until the next patch.
+      ...(process.env.GITHUB_ACTIONS
+        ? [{ find: /^@ozjsey\/bigdecimal-string$/, replacement: pkg('./node_modules/@ozjsey/bigdecimal-string/dist/index.min.js') }]
+        : []),
       ...LIBRARY_ALIASES,
     ],
     dedupe: ['vue', ...CODEMIRROR_FAMILY],

@@ -15,20 +15,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      // Each sibling package carries its own node_modules/vue. Without these
-      // two entries TypeScript resolves `Plugin`, `Ref`, `Directive` etc. from
-      // a different copy of Vue than the playground's, and every cross-package
-      // type comparison fails. Mirrors `resolve.dedupe` in vite.config.ts.
       "vue": ["./node_modules/vue"],
       "vue/*": ["./node_modules/vue/*"],
-      "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
-      "@ozjsey/v-dropzone": ["../v-dropzone/vDropzone.ts"],
-      "@ozjsey/v-fit-children": ["../v-fit-children/vFitChildren.ts"],
-      "@ozjsey/v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
-      "@ozjsey/v-observe": ["../v-observe/vObserve.ts"],
-      "@ozjsey/v-scroll-into-view": ["../v-scroll-into-view/vScrollIntoView.ts"],
-      "@ozjsey/v-select-text": ["../v-select-text/vSelectText.ts"],
-      "@ozjsey/v-teleport-to": ["../v-teleport-to/vTeleportTo.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "scripts/**/*.mjs"]

@@ -19,11 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - package: dependency-grouper
+          - package: '@ozjsey/dependency-grouper'
             repository: ozjsey/dependency-grouper
-          - package: bigdecimal-string
+          - package: '@ozjsey/bigdecimal-string'
             repository: ozjsey/big_decimal_string
-          - package: vue-write-behind
+          - package: '@ozjsey/vue-write-behind'
             repository: ozjsey/vue-write-behind
           - package: '@ozjsey/v-copy'
             repository: ozjsey/vue-copy
@@ -31,13 +31,13 @@ jobs:
             repository: ozjsey/vue-fit-children
           - package: '@ozjsey/v-keyboard-navigation'
             repository: ozjsey/vue-keyboard-navigation
-          - package: v-observe
+          - package: '@ozjsey/v-observe'
             repository: ozjsey/vue-observe
-          - package: v-scroll-into-view
+          - package: '@ozjsey/v-scroll-into-view'
             repository: ozjsey/vue-scroll-into-view
-          - package: v-select-text
+          - package: '@ozjsey/v-select-text'
             repository: ozjsey/vue-select-text
-          - package: v-teleport-to
+          - package: '@ozjsey/v-teleport-to'
             repository: ozjsey/vue-teleport-to
           - package: '@ozjsey/v-dropzone'
             repository: ozjsey/vue-dropzone
