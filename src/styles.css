@@ -1,0 +1,505 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Playground chrome (dark) + the `.pg-*` utilities demos are allowed to use.
+
+   Demo SFCs should stay short. Anything that is *not* about the directive
+   under test — buttons, inputs, log panels, scroll boxes — comes from the
+   `.pg-*` classes below so a demo's own `<style scoped>` block only ever
+   contains CSS that is part of what it is demonstrating.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg: #0f1117;
+  --bg-raised: #161923;
+  --bg-inset: #1d2130;
+  --border: #2a3040;
+  --border-strong: #3a4256;
+  --text: #e6e9f0;
+  --text-dim: #9aa3b8;
+  --accent: #7c8cff;
+  --accent-dim: #4b56a8;
+  --ok: #3ddc97;
+  --warn: #f5a623;
+  --err: #ff6b6b;
+  --stage: #ffffff;
+  --stage-text: #1c2130;
+  --stage-border: #d8dde8;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+code,
+kbd {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+kbd {
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+  background: var(--bg-inset);
+}
+
+/* ── App shell ─────────────────────────────────────────────────────────── */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.85rem 1.25rem 0.5rem;
+  flex-wrap: wrap;
+}
+
+.app-header__title {
+  font-size: 1rem;
+  font-weight: 650;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.app-header__meta {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.app-header__spacer {
+  flex: 1;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 1.25rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.86rem;
+  font-family: var(--mono);
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px 6px 0 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--text);
+  background: var(--bg-raised);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.tab__count {
+  color: var(--text-dim);
+  font-size: 0.75em;
+  margin-left: 0.35em;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 1.5rem;
+  padding: 1.5rem 1.25rem 6rem;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toc {
+    display: none;
+  }
+}
+
+.lib-head {
+  margin-bottom: 1.25rem;
+}
+
+.lib-head h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 1.3rem;
+}
+
+.lib-head p {
+  margin: 0.35rem 0 0;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+.lib-head__status {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+}
+
+.lib-head__notes {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border-left: 2px solid var(--accent-dim);
+  background: var(--bg-raised);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.lib-head__notes li + li {
+  margin-top: 0.3rem;
+}
+
+.toc {
+  position: sticky;
+  top: 6.5rem;
+  font-size: 0.82rem;
+}
+
+.toc__title {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  margin-bottom: 0.5rem;
+}
+
+.toc a {
+  display: block;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 0.2rem 0.5rem;
+  border-left: 2px solid var(--border);
+  line-height: 1.4;
+}
+
+.toc a:hover {
+  color: var(--text);
+  border-left-color: var(--accent);
+}
+
+.toc a.is-dirty::after {
+  content: ' •';
+  color: var(--warn);
+}
+
+/* ── Demo card ─────────────────────────────────────────────────────────── */
+
+.demo {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+  scroll-margin-top: 6.5rem;
+}
+
+.demo__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo__title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.demo__blurb {
+  margin: 0.15rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.demo__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+
+.demo__tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: #b9c2ff;
+  background: #232842;
+  border: 1px solid #313a63;
+  border-radius: 4px;
+  padding: 0.02rem 0.35rem;
+}
+
+/* A cross-library card: the tab owns the feature, `uses` names the rest. */
+.demo__tag--uses {
+  color: #ffd8a8;
+  background: #3a2a17;
+  border-color: #6b4a22;
+}
+
+.demo__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.demo__btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+
+.demo__btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.demo__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.demo__btn.is-on {
+  color: #fff;
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.demo__dirty {
+  color: var(--warn);
+  font-size: 0.72rem;
+  align-self: center;
+}
+
+.demo__stage {
+  background: var(--stage);
+  color: var(--stage-text);
+  padding: 1.1rem;
+  overflow: auto;
+}
+
+.demo__banner {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.demo__banner--error {
+  background: #2a1518;
+  color: #ffb3b3;
+}
+
+.demo__banner--warn {
+  background: #2a2313;
+  color: #ffd89b;
+}
+
+.demo__editor {
+  border-top: 1px solid var(--border);
+}
+
+.editor-host .cm-editor {
+  max-height: 32rem;
+  font-size: 12.5px;
+}
+
+.editor-host .cm-scroller {
+  font-family: var(--mono);
+}
+
+.editor-hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 0.4rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-inset);
+}
+
+/* ── `.pg-*` utilities — available INSIDE demo SFCs ────────────────────── */
+
+.pg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pg-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--stage-border);
+  background: #f7f8fb;
+  color: var(--stage-text);
+  cursor: pointer;
+}
+
+.pg-btn:hover:not(:disabled) {
+  background: #eef1f7;
+}
+
+.pg-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pg-btn--primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.pg-btn--primary:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.pg-input,
+.pg-select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--stage-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--stage-text);
+}
+
+.pg-label {
+  font-size: 0.78rem;
+  color: #5b6478;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pg-muted {
+  color: #6b7488;
+  font-size: 0.82rem;
+}
+
+.pg-box {
+  border: 1px solid var(--stage-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fbfcfe;
+}
+
+.pg-chip {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d0ff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.pg-log {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  background: #10131c;
+  color: #cfd6e6;
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  max-height: 9rem;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.pg-scroller {
+  height: 200px;
+  overflow: auto;
+  border: 1px solid var(--stage-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.pg-kv {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: #40485c;
+}
+
+/**
+ * Boot failure panel. Painted by `src/main.ts` when the SFC compiler and the
+ * Vue runtime are different versions (PG-14) — the app deliberately never
+ * mounts, so this is the whole page.
+ */
+.pg-fatal {
+  margin: 2rem auto;
+  max-width: 62rem;
+  padding: 1.25rem 1.5rem;
+  border: 2px solid #b91c1c;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}

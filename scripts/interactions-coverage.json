@@ -1,0 +1,5 @@
+{
+  "_note": "Interaction-coverage ratchet, read by scripts/interactions.mjs. A library with no spec is reported as UNCOVERED, not as a failure \u2014 five of eight are uncovered today and a permanently-red command is a command nobody reads. What IS a failure is dropping below these numbers: a deleted spec, or a demo losing its only check. Raise them when you add coverage; lower them only deliberately, and say why in the commit.",
+  "librariesWithSpec": 5,
+  "demoCardsWithChecks": 56
+}

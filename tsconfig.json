@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      // Each sibling package carries its own node_modules/vue. Without these
+      // two entries TypeScript resolves `Plugin`, `Ref`, `Directive` etc. from
+      // a different copy of Vue than the playground's, and every cross-package
+      // type comparison fails. Mirrors `resolve.dedupe` in vite.config.ts.
+      "vue": ["./node_modules/vue"],
+      "vue/*": ["./node_modules/vue/*"],
+      "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
+      "v-dropzone": ["../v-dropzone/vDropzone.ts"],
+      "@ozjsey/v-fit-children": ["../v-fit-children/vFitChildren.ts"],
+      "v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
+      "v-observe": ["../v-observe/vObserve.ts"],
+      "v-scroll-into-view": ["../v-scroll-into-view/vScrollIntoView.ts"],
+      "v-select-text": ["../v-select-text/vSelectText.ts"],
+      "v-teleport-to": ["../v-teleport-to/vTeleportTo.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "scripts/**/*.mjs"]
+}
