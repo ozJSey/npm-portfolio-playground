@@ -26,21 +26,21 @@ jobs:
           - package: '@ozjsey/vue-write-behind'
             repository: ozjsey/vue-write-behind
           - package: '@ozjsey/v-copy'
-            repository: ozjsey/vue-copy
+            repository: ozjsey/v-copy
           - package: '@ozjsey/v-fit-children'
             repository: ozjsey/vue-fit-children
           - package: '@ozjsey/v-keyboard-navigation'
-            repository: ozjsey/vue-keyboard-navigation
+            repository: ozjsey/v-keyboard-navigation
           - package: '@ozjsey/v-observe'
-            repository: ozjsey/vue-observe
+            repository: ozjsey/v-observe
           - package: '@ozjsey/v-scroll-into-view'
-            repository: ozjsey/vue-scroll-into-view
+            repository: ozjsey/v-scroll-into-view
           - package: '@ozjsey/v-select-text'
-            repository: ozjsey/vue-select-text
+            repository: ozjsey/v-select-text
           - package: '@ozjsey/v-teleport-to'
-            repository: ozjsey/vue-teleport-to
+            repository: ozjsey/v-teleport-to
           - package: '@ozjsey/v-dropzone'
-            repository: ozjsey/vue-dropzone
+            repository: ozjsey/v-dropzone
     steps:
       - uses: actions/checkout@v4
         with:
