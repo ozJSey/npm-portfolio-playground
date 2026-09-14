@@ -27,10 +27,22 @@ const open = ref(true)
 const animation = ref<'opacity' | 'collapse'>('collapse')
 
 const trigger = useTemplateRef<HTMLElement>('trigger')
+const room = useTemplateRef<HTMLElement>('room')
 const text = computed(() => SENTENCE.split(' ').slice(0, words.value).join(' '))
 
 const options = computed(() => ({
   to: trigger.value,
+  // The room is a BOX, not the viewport — 96px above the reference and 264px
+  // below, fixed, whatever the window is doing. Without it this card's central
+  // claim was only true on a short window: `maxHeight` defaults to 240, so the
+  // fit test never asks a side for more than 240px, and on a 900px-tall window
+  // both sides have more than that at every content length. The placement
+  // therefore never moved across the entire slider — the one thing the card
+  // exists to show, invisible on a normal laptop (TT-22 finding 8). Clipping
+  // the space to a drawn box makes the demo reproducible on any screen, and
+  // makes "the room on each side never changes" literally true instead of
+  // true-if-you-do-not-scroll.
+  boundary: room.value ?? ('viewport' as const),
   placement: placement.value,
   enabled: open.value,
   widthMultiplier: 1.5,
@@ -91,8 +103,11 @@ function onPositioned(e: Event) {
     <span v-if="truncated" class="pg-chip is-cut">data-teleport-truncated</span>
   </div>
 
-  <div class="rail">
-    <button ref="trigger" class="pg-btn pg-btn--primary">reference</button>
+  <div ref="room" class="room">
+    <span class="room__edge">boundary — 96px above the reference, 264px below</span>
+    <div class="rail">
+      <button ref="trigger" class="pg-btn pg-btn--primary">reference</button>
+    </div>
   </div>
 
   <div
@@ -105,12 +120,22 @@ function onPositioned(e: Event) {
   </div>
 
   <p class="pg-muted">
-    Drag <strong>content</strong>. The room on each side never changes — only the tooltip's own
-    height does — and the placement still moves, because the fit test asks about the
-    <em>content</em>, not about the box the host happened to have when the directive looked at it.
-    <code>detail.contentHeight</code> is that measurement, taken with the closed state, our own
+    Drag <strong>content</strong>. The room on each side never changes — the dashed box is the
+    <code>boundary</code>, so it is 96px above and 264px below wherever the page is scrolled and
+    whatever size your window is — and the placement still moves, because the fit test asks about
+    the <em>content</em>, not about the box the host happened to have when the directive looked at
+    it. <code>detail.contentHeight</code> is that measurement, taken with the closed state, our own
     <code>max-height</code> and the side coordinate all lifted for the duration of one synchronous
-    read.
+    read. Around 20 words the tooltip outgrows the 96px above it and jumps below.
+  </p>
+  <p class="pg-muted">
+    <strong>Only <code>top</code> moves here, and that is the whole point of a fit-based flip.</strong>
+    <code>bottom</code> has 264px, which is more than <code>maxHeight: 240</code> will ever ask
+    for, so the tooltip fits there at every length and is never moved off a side that works.
+    <code>auto</code> picks the roomier side first — below, by 114px to 46px once the edge buffers
+    are charged — and then finds it fits, so it does not move either. A flip you can only reach in
+    one direction is not a broken demo: with one fixed geometry it is the only thing that <em>can</em>
+    happen, because the side that flips is by definition the smaller one.
   </p>
   <p class="pg-muted">
     Switch <strong>closed state</strong> between the two animations and nothing about the verdict
@@ -132,10 +157,30 @@ function onPositioned(e: Event) {
 </template>
 
 <style scoped>
+/* The `boundary` box. Deliberately asymmetric: 96px of room above the
+   reference and 264px below, so the tooltip outgrows the top side long before
+   it outgrows the bottom one and the flip is reachable by the content slider
+   alone. An OUTLINE rather than a border, because `boundary` measures the
+   element's border box and a border would put the real edge 2px inside the
+   drawn one. */
+.room {
+  position: relative;
+  outline: 2px dashed #4f46e5;
+  outline-offset: -2px;
+  border-radius: 8px;
+  background: repeating-linear-gradient(45deg, #fff 0 12px, #f8f9fd 12px 24px);
+  padding: 96px 0 264px;
+}
+.room__edge {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 0.72rem;
+  color: #7c85a0;
+}
 .rail {
   display: grid;
   place-items: center;
-  padding: 2.4rem 0;
 }
 /* A fixed reference width, because `widthMultiplier` derives the tooltip's
    width from it — and the tooltip's width is what decides how its text wraps,

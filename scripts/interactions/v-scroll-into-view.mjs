@@ -497,11 +497,16 @@ const CHECKS = [
   // positive and negative offsets, all within ~1px"), because rewriting
   // `scrollFor` for B2 and B3 touched every one of those paths.
   //
-  // Vertical axis only: the grid is 8 × 8rem wide against a pane barely
-  // narrower, so a horizontal alignment clamps at the scroll limit and would
-  // be asserting the clamp rather than the alignment. The inline axis is
-  // covered by the unit tests, where the geometry is chosen rather than
-  // measured.
+  // These four measure the VERTICAL axis; the two after them measure the
+  // horizontal one, which was not measurable at all until SIV-6 — the grid was
+  // 8 × 8rem against a pane barely narrower, so every `inline` alignment
+  // clamped at the scroll limit and three of the four were indistinguishable.
+  // The grid is 16 columns now and the target sits where all four are
+  // reachable from both ends.
+  //
+  // They read `.cell.target`, not a `span` inside it, because the directive is
+  // on the cell: bound to the 23px emoji it used to hold, `block: 'start'`
+  // aligned the emoji and clipped the cell.
   // -------------------------------------------------------------------------
   {
     demo: '06-alignment.vue',
@@ -514,7 +519,7 @@ const CHECKS = [
         await __siv.sleep(150)
         __siv.button(file, 'Scroll').click()
         await __siv.still(pane)
-        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const t = __siv.stage(file).querySelector('.cell.target').getBoundingClientRect()
         const p = pane.getBoundingClientRect()
         return { top: t.top - p.top, height: t.height }
       }
@@ -548,7 +553,7 @@ const CHECKS = [
         await __siv.sleep(150)
         __siv.button(file, 'Scroll').click()
         await __siv.still(pane)
-        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const t = __siv.stage(file).querySelector('.cell.target').getBoundingClientRect()
         return t.top - pane.getBoundingClientRect().top
       }
       const plus = await at(40)
@@ -571,7 +576,7 @@ const CHECKS = [
         await __siv.sleep(150)
         __siv.button(file, 'Scroll').click()
         await __siv.still(pane)
-        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const t = __siv.stage(file).querySelector('.cell.target').getBoundingClientRect()
         const p = pane.getBoundingClientRect()
         return t.bottom - (p.top + pane.clientTop + pane.clientHeight)
       }
@@ -600,7 +605,7 @@ const CHECKS = [
         await __siv.sleep(150)
         __siv.button(file, 'Scroll').click()
         await __siv.still(pane)
-        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const t = __siv.stage(file).querySelector('.cell.target').getBoundingClientRect()
         const p = pane.getBoundingClientRect()
         return t.top + t.height / 2 - (p.top + pane.clientTop + pane.clientHeight / 2)
       }
@@ -655,7 +660,7 @@ const CHECKS = [
   },
   {
     demo: '09-resilience.vue',
-    name: 'a misconfigured container warns once per message instead of failing silently',
+    name: 'each of the six broken containers warns, once — not one warning for all six',
     fn: async () => {
       const file = '09-resilience.vue'
       const seen = []
@@ -668,11 +673,15 @@ const CHECKS = [
         console.warn = original
       }
       const mine = seen.filter((m) => m.indexOf('[v-scroll-into-view]') === 0)
+      const resolved = mine.filter((m) => m.indexOf('resolved to null') !== -1)
       return {
-        // Six broken bindings, all of them "resolved to null or detached", so
-        // the latch collapses them to one line — which is the point.
-        pass: mine.length === 1 && mine[0].indexOf('resolved to null') !== -1,
-        detail: `${mine.length} warning(s): ${mine.map((m) => m.slice(0, 60)).join(' | ') || 'none'}`,
+        // SIV-6 finding 3. Six broken bindings on six different elements, all
+        // reaching the same sentence. Through 1.3.0 the latch was one global
+        // set of strings, so the first of them spent it for the session and the
+        // other five — and every misconfiguration anywhere on the page after
+        // them — said nothing. Six elements, six lines.
+        pass: resolved.length === 6 && mine.length === 6,
+        detail: `${mine.length} warning(s), ${resolved.length} of them the null/detached one`,
       }
     },
   },
@@ -719,6 +728,236 @@ const CHECKS = [
       }
     },
   },
+
+  // -------------------------------------------------------------------------
+  // 16 — SIV-6 finding 1. The horizontal axis, which nothing in this file
+  // touched before: card 15's 192-row sweep pins `inline` to `'nearest'` on
+  // equal-width panes, so a fix to the direction handling could regress without
+  // a single check going red. It did, and the certifier found it in the live
+  // 1.3.0 tarball. These five rows are the reason it cannot happen quietly again.
+  //
+  // Negative control: revert either half of the fix in
+  // `v-scroll-into-view/src/execute-scroll.ts` (take the clamp sign from
+  // `geo.targetRtl` again, or re-clamp a `null` axis) and run this file against
+  // `dist` — the two single-row checks and the sweep all go red.
+  // -------------------------------------------------------------------------
+  {
+    demo: '16-direction.vue',
+    name: 'the direction sweep: 36 rows, both axes, every one on native\'s pixel',
+    fn: async () => {
+      const file = '16-direction.vue'
+      __siv.button(file, 'Run the direction sweep').click()
+      const summary = await __siv.until(() => {
+        const t = __siv.out(file, 'summary')
+        return t && t !== '—' ? t : null
+      }, 60000, 300)
+      const failures = [...__siv.stage(file).querySelectorAll('.fails tbody tr')].map((tr) =>
+        [...tr.children].map((td) => __siv.txt(td)).join(' '),
+      )
+      return {
+        pass: !!summary && summary.indexOf('disagree') === -1 && failures.length === 0,
+        detail: `${summary ?? 'never finished'}${failures.length ? ' — ' + failures.slice(0, 6).join(' | ') : ''}`,
+      }
+    },
+  },
+  {
+    demo: '16-direction.vue',
+    name: 'sweep control: the rails really do change direction mid-sweep',
+    fn: async () => {
+      const file = '16-direction.vue'
+      // A sweep that stopped sweeping would report a clean 36 rows forever.
+      const rail = __siv.stage(file).querySelector('.rail')
+      const seen = new Set([getComputedStyle(rail).direction])
+      __siv.button(file, 'Run the direction sweep').click()
+      const end = Date.now() + 30000
+      while (Date.now() < end && seen.size < 2) {
+        seen.add(getComputedStyle(rail).direction)
+        await __siv.sleep(40)
+      }
+      await __siv.until(() => (__siv.out(file, 'summary') !== '—' ? true : null), 60000, 300)
+      return {
+        pass: seen.size === 2,
+        detail: `pane directions observed during the run: ${[...seen].join(', ')}`,
+      }
+    },
+  },
+  {
+    demo: '16-direction.vue',
+    name: "an RTL card in an LTR rail: `inline: 'start'` lands where native lands, not on 0",
+    fn: async () => {
+      const file = '16-direction.vue'
+      // The certifier's realistic repro: an LTR rail of cards whose items use
+      // `dir="auto"` for user-generated text. 1.3.0: lib 0, native 223/559/1231.
+      __siv.select(file, 'pane dir', 'ltr')
+      __siv.select(file, 'target dir', 'rtl')
+      __siv.select(file, 'inline', 'start')
+      __siv.select(file, 'block', 'nearest')
+      await __siv.sleep(120)
+      __siv.button(file, 'Scroll both').click()
+      const text = await __siv.settled(file, 'live')
+      const [, lib, nat] = __siv.nums(text)
+      return {
+        pass: lib === nat && lib > 0,
+        detail: `readout "${text}" — the LTR rail must reach a POSITIVE scrollLeft`,
+      }
+    },
+  },
+  {
+    demo: '16-direction.vue',
+    name: "an LTR card in an RTL rail: `inline: 'start'` reaches a NEGATIVE scrollLeft, not 0",
+    fn: async () => {
+      const file = '16-direction.vue'
+      __siv.select(file, 'pane dir', 'rtl')
+      __siv.select(file, 'target dir', 'ltr')
+      __siv.select(file, 'inline', 'start')
+      __siv.select(file, 'block', 'nearest')
+      await __siv.sleep(120)
+      __siv.button(file, 'Scroll both').click()
+      const text = await __siv.settled(file, 'live')
+      const [, lib, nat] = __siv.nums(text)
+      return {
+        pass: lib === nat && lib < 0,
+        detail: `readout "${text}" — an RTL scroller runs 0…-max, so this must go negative`,
+      }
+    },
+  },
+  {
+    demo: '16-direction.vue',
+    name: 'a VERTICAL-only scroll leaves scrollLeft exactly where it was',
+    fn: async () => {
+      const file = '16-direction.vue'
+      // The regression half, and the part that is strictly worse than 1.2.0:
+      // `inline: 'nearest'` computes `null` for a target that is already
+      // horizontally visible, and 1.3.0 ran that null through the clamp anyway.
+      // Measured against the published artifact: a pane at 650 went to 0.
+      __siv.select(file, 'pane dir', 'ltr')
+      __siv.select(file, 'target dir', 'rtl')
+      __siv.select(file, 'inline', 'nearest')
+      __siv.select(file, 'block', 'start')
+      await __siv.sleep(120)
+      __siv.button(file, 'Scroll both, vertically only').click()
+      const text = await __siv.settled(file, 'live')
+      const [from, lib, nat] = __siv.nums(text)
+      return {
+        pass: from > 100 && lib === from && lib === nat,
+        detail: `readout "${text}" — started at ${from}, so both panes must still be there`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 06 — SIV-6 finding 4. The card advertised "every native alignment including
+  // the horizontal axis" while three of the four `inline` values landed on the
+  // same `scrollLeft 0` at desktop width, because the content was only 87px
+  // wider than the scrollport. A control nobody can tell apart from a broken
+  // one is not a demonstration.
+  // -------------------------------------------------------------------------
+  {
+    demo: '06-alignment.vue',
+    name: 'the inline control moves the pane to three DIFFERENT places',
+    fn: async () => {
+      const file = '06-alignment.vue'
+      const pane = __siv.stage(file).querySelector('#grid-pane')
+      const at = {}
+      for (const align of ['start', 'center', 'end']) {
+        pane.scrollLeft = 0
+        __siv.select(file, 'inline', align)
+        __siv.select(file, 'block', 'start')
+        __siv.select(file, 'behavior', 'instant')
+        await __siv.sleep(120)
+        __siv.button(file, 'Scroll').click()
+        await __siv.still(pane)
+        at[align] = Math.round(pane.scrollLeft)
+      }
+      const max = Math.round(pane.scrollWidth - pane.clientWidth)
+      return {
+        pass: at.start > at.center && at.center > at.end && at.end > 0 && at.start < max,
+        detail: `start ${at.start} > center ${at.center} > end ${at.end} > 0, all under the ${max}px maximum`,
+      }
+    },
+  },
+  {
+    demo: '06-alignment.vue',
+    name: 'the directive is on the CELL, so a start alignment does not clip it',
+    fn: async () => {
+      const file = '06-alignment.vue'
+      // It used to be bound to the 23px emoji inside the 128x80 cell, so
+      // `block: 'start'` aligned the emoji and sliced the top off the thing the
+      // eye reads as the target.
+      const pane = __siv.stage(file).querySelector('#grid-pane')
+      const cell = __siv.stage(file).querySelector('.cell.target')
+      pane.scrollTop = 0
+      __siv.select(file, 'block', 'start')
+      __siv.select(file, 'inline', 'nearest')
+      __siv.select(file, 'behavior', 'instant')
+      await __siv.sleep(120)
+      __siv.button(file, 'Scroll').click()
+      await __siv.still(pane)
+      const top = __siv.topIn(pane, cell)
+      return {
+        pass: Math.abs(top - pane.clientTop) <= 2,
+        detail: `the highlighted cell rests ${top}px below the pane's border box (border ${pane.clientTop}px), so it is flush, not clipped`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 03 — SIV-6 finding 2. `container: paneRef.value ?? undefined` is what the
+  // type used to force, and on the MOUNT-time scroll it means "no container":
+  // native path, every ancestor moves, page included. The getter form is the
+  // one that survives, because it is resolved at scroll time.
+  // -------------------------------------------------------------------------
+  {
+    demo: '03-container.vue',
+    name: 'mount-time, getter form: the pane scrolls and the box around it does not',
+    fn: async () => {
+      const file = '03-container.vue'
+      __siv.select(file, 'on mount', 'getter')
+      await __siv.sleep(120)
+      __siv.button(file, 'Remount, scrolling on mount').click()
+      const text = await __siv.settled(file)
+      const [pane, outer] = __siv.nums(text)
+      return {
+        pass: pane > 300 && outer === 0,
+        detail: `readout "${text}" — the pinned pane moved and the outer scroller did not`,
+      }
+    },
+  },
+  {
+    demo: '03-container.vue',
+    name: 'mount-time, `?? undefined`: the outer scroller moves — the trap, still visible',
+    fn: async () => {
+      const file = '03-container.vue'
+      // Not a defect being asserted as fixed: `undefined` legitimately means
+      // "no container". What 1.3.1 changes is that it is no longer SILENT, and
+      // that the honest spelling (`paneRef.value`, raw null) now type-checks.
+      __siv.select(file, 'on mount', 'coalesced')
+      await __siv.sleep(120)
+      __siv.button(file, 'Remount, scrolling on mount').click()
+      const text = await __siv.settled(file)
+      const [, outer] = __siv.nums(text)
+      return {
+        pass: outer > 50,
+        detail: `readout "${text}" — native walks the whole ancestor chain, which is the thing \`container\` exists to stop`,
+      }
+    },
+  },
+  {
+    demo: '03-container.vue',
+    name: 'mount-time, raw null: nothing scrolls at all, and there is no native fallback',
+    fn: async () => {
+      const file = '03-container.vue'
+      __siv.select(file, 'on mount', 'raw')
+      await __siv.sleep(120)
+      __siv.button(file, 'Remount, scrolling on mount').click()
+      const text = await __siv.settled(file)
+      const [pane, outer] = __siv.nums(text)
+      return {
+        pass: pane === 0 && outer === 0,
+        detail: `readout "${text}" — a container that resolved to nothing scrolls nothing`,
+      }
+    },
+  },
 ]
 
 /**
@@ -748,6 +987,7 @@ const TRACE_DEFAULT = `(async () => {
   const trace = await __siv.trace(pane, 900)
   return { reduce, moves: __siv.moves(trace), last: trace[trace.length - 1] }
 })()`
+
 
 const NATIVE_CHECKS = [
   {
@@ -789,6 +1029,30 @@ const NATIVE_CHECKS = [
       return {
         pass: out.reduce && out.moves.length >= 4,
         detail: `reduce=${out.reduce}, ${out.moves.length} distinct positions, settled at ${out.last}`,
+      }
+    },
+  },
+  // -------------------------------------------------------------------------
+  // SIV-6 finding 3's false alarm. This one is here rather than in CHECKS
+  // because what it asserts about is the console at PAGE LOAD, before any check
+  // has run — which only the Node side of the harness is still holding.
+  // (Card 09's six-warnings check is an ordinary in-page check: it patches
+  // `console.warn` around its own click, so it does not need this.)
+  // -------------------------------------------------------------------------
+  {
+    demo: '05-always.vue',
+    name: 'a correctly configured chat pane that is not full yet says nothing at page load',
+    async run(ctx) {
+      // The false alarm that used to spend the latch for the whole session, on
+      // a demo that is working perfectly: an empty chat pane has `overflow-y:
+      // auto` and nothing to scroll, which is a chat nobody has written in, not
+      // a misconfiguration. Nothing on this tab should produce that sentence.
+      const noisy = ctx.page.consoleWarnings.filter((w) => w.includes('no scrollable overflow'))
+      return {
+        pass: noisy.length === 0,
+        detail: noisy.length
+          ? `"${noisy[0].slice(0, 120)}" — fired on a pane that is simply not full`
+          : 'no "no scrollable overflow" warning anywhere on the tab, at load or since',
       }
     },
   },

@@ -5,12 +5,13 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/vue-write-behind',
   tagline:
     'Write-behind cache for Vue 3 — one composable over a reactive record. Local state stays authoritative, the server’s reply is discarded on purpose, and a failed save never rolls back or drops what the user typed.',
-  status: '0.1.1 local, 0.1.0 on npm as @ozjsey/vue-write-behind — publish pending (0.1.1 fixes a discard() data-loss bug)',
+  status:
+    '0.2.0 local, 0.1.1 on npm as @ozjsey/vue-write-behind — publish pending. 0.2.0 moves the engine into @ozjsey/write-behind (unpublished) and adds the flush on pagehide plus the final flag a writer hangs keepalive off.',
   notes: [
     'Not a directive — one composable. There is nothing for the app to register: the demos import useWriteBehind directly, which is exactly how an app uses it.',
     'Every "server" on this tab is a plain async function with an artificial delay — that is the library’s real integration point (`write: (value, key) => Promise`), not a stand-in for one. No HTTP is involved, so the cards behave identically on the deployed static site and on your machine.',
     'Card 1 is the product. The rest are details of it. Start there, and keep typing while it says "saving…".',
-    'What this tab does NOT demonstrate: that a flush survives a real page teardown, `keepalive` delivery, or genuine offline. Card 11 says so on the card itself rather than implying otherwise.',
+    'What this tab does NOT demonstrate: that a flush survives a real page teardown, `keepalive` delivery, or genuine offline. Card 11 shows exactly what the writer is told when the page is going away — `reason: unload`, `final: true` — and says plainly that setting `keepalive` on a real request, and it arriving, is the part no card here can prove.',
   ],
   demos: [
     {
@@ -85,10 +86,18 @@ const manifest: LibraryManifest = {
     },
     {
       file: '11-flush-and-tab-hide.vue',
-      title: 'flush(), and the flush on tab hide',
+      title: 'flush(), and the flush when the page goes away',
       blurb:
-        'Both sides sit on a 30 s interval, so only flush() or a real tab switch moves them. Reads out what the browser actually did — and states plainly what it cannot prove.',
-      tags: ['flush()', 'flushOnHidden', 'visibilitychange'],
+        'Both sides sit on a 30 s interval, so only flush() or a real tab switch moves them. Every request logs the attempt it was handed, so you can watch reason flip to unload and final to true — the flag keepalive hangs off. Reads out what the browser actually did, and states plainly what it cannot prove.',
+      tags: [
+        'flush()',
+        "flush('unload')",
+        'flushOnHidden',
+        'visibilitychange',
+        'pagehide',
+        'WriteBehindAttempt',
+        'keepalive',
+      ],
     },
   ],
 }

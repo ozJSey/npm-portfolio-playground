@@ -42,6 +42,10 @@ const LIBRARIES: Record<string, LibraryLocation> = {
   // Composable, not a directive — the alias mechanism does not care, but
   // `src/libraries.ts` does: it has no entry in INSTALLS. See the note there.
   '@ozjsey/vue-write-behind': { dir: 'vue-write-behind', entry: 'vueWriteBehind.ts' },
+  // No tab of its own yet (WBC-5). It is aliased because `@ozjsey/vue-write-behind`
+  // is a thin adapter over it and imports it by bare specifier: without this the
+  // write-behind tab would fail to resolve the engine.
+  '@ozjsey/write-behind': { dir: 'write-behind', entry: 'writeBehind.ts' },
 }
 
 const TARGET = process.env.PLAYGROUND_TARGET === 'dist' ? 'dist' : 'src'

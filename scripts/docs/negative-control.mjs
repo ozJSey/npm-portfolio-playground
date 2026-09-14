@@ -9,7 +9,7 @@
  *
  * So this is not a one-off experiment somebody ran once and wrote up. It runs
  * **before every real check, on every invocation of `scripts/docs.mjs`**, and
- * the run aborts if any control fails to trip. `pnpm docs` cannot print a green
+ * the run aborts if any control fails to trip. `pnpm docs:check` cannot print a green
  * summary without having just demonstrated, in that same process and that same
  * browser, that it reports each defect class it claims to cover.
  *

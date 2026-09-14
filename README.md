@@ -18,7 +18,7 @@ artifacts consumers install.
 | `pnpm smoke` | Boots the server and renders every tab in headless Chrome twice |
 | `pnpm interactions` | Drives every card through CDP in a real Chrome and asserts on the resulting UI |
 | `pnpm geometry` | Measures the `v-fit-children` rows at three viewports — spill, clipping, over-hiding, and the event against the DOM |
-| `pnpm docs` | Checks the Documentation view: every package README rendered, its code samples compiled, its links resolved, its tarball packed |
+| `pnpm docs:check` | Checks the Documentation view: every package README rendered, its code samples compiled, its links resolved, its tarball packed |
 | `pnpm deeplinks` | Follows every `#<tab>/<card>` deep link in a real browser — all 142 cards, both separator forms, and every card link published in a sibling README |
 | `pnpm typecheck` | `vue-tsc` over the playground **and** every demo SFC |
 | `pnpm typecheck:libs` | `tsc --noEmit` over each aliased sibling package, with its own tsconfig — ten seconds, no browser |
@@ -69,7 +69,7 @@ longer takes the app down — but if the package you need is the broken one, nam
 It is deliberately not the default: a tab quietly reading the last published build instead of the
 working tree is exactly the rot the source aliases exist to prevent.
 
-**The instruments prove they can fail.** `pnpm docs` runs 19 deliberately broken samples through its
+**The instruments prove they can fail.** `pnpm docs:check` runs 19 deliberately broken samples through its
 own code paths before it checks anything (see below), and `pnpm deeplinks` rejects two deliberately
 wrong assertions before it follows a single real link. `geometry` has the same idea as an env var:
 
@@ -130,18 +130,26 @@ none. The card list comes from `window.__PLAYGROUND_CARDS__`, published by `src/
 registry, so this runner and `scripts/docs/links.mjs` compare READMEs against the same list the
 router resolves against rather than each re-deriving it.
 
-## The documentation gate — `pnpm docs`
+## The documentation gate — `pnpm docs:check`
+
+> **The colon is load-bearing.** `docs` is a built-in npm/pnpm command — *"Open documentation for a
+> package in a web browser"*, alias `home`. So `pnpm docs` never ran this gate: it shelled out to
+> the built-in, found no browser to open, and **exited 0 with no output**. It read exactly like a
+> pass. Every instruction in this repo that said `pnpm docs` was running nothing, for as long as the
+> script was named that. `pnpm run docs` would have worked, but the bare form is what people type.
+> A name containing a colon cannot collide with a built-in, which is why this one has one — do not
+> rename it back. Measured 2026-09-14 on pnpm 10.23.0.
 
 `tickets/DOCS-3`; owner, 2026-09-13: *"We can treat documentation as smoke test too."* The
 Documentation view renders each package's own `README.md`, so it is a rendered artifact like any
 card and is checked like one. `node scripts/docs.mjs`, same harness, same Chrome.
 
 ```bash
-pnpm docs                      # sources
-pnpm docs:dist                 # the built dist entries — what an npm reader would get
-ONLY=v-dropzone pnpm docs      # one package
-DOCS_NET=0 pnpm docs           # no outbound HTTP
-DOCS_PACK=0 pnpm docs          # no `npm pack` (leaves the npm copy UNVERIFIED, and says so)
+pnpm docs:check                      # sources
+pnpm docs:check:dist                 # the built dist entries — what an npm reader would get
+ONLY=v-dropzone pnpm docs:check      # one package
+DOCS_NET=0 pnpm docs:check           # no outbound HTTP
+DOCS_PACK=0 pnpm docs:check          # no `npm pack` (leaves the npm copy UNVERIFIED, and says so)
 ```
 
 Per package, five things:
@@ -177,7 +185,7 @@ has a `<script>` it is claiming to be a whole component and is judged as one.
 **The gate proves it can fail, every run.** `scripts/docs/negative-control.mjs` feeds 19 deliberately
 broken samples and READMEs through the same code paths *before* any package is checked, and the run
 aborts if one of them passes — including a correct sample that must come back clean, so a check that
-cried wolf at everything could not sneak through. `pnpm docs` cannot print a green summary without
+cried wolf at everything could not sneak through. `pnpm docs:check` cannot print a green summary without
 having just demonstrated, in that process and that browser, that it goes red on each defect class it
 claims to cover.
 
@@ -265,7 +273,7 @@ tool will happily leave the unguarded form in place forever once it is there.
 | `v-fit-children` | 9 | +N badge, `data` → `hiddenData`/`hiddenIndices`, pinned children, `gap` + separate width container, inline badge, dynamic children, `data-fit-children-state` CSS hook |
 | `v-keyboard-navigation` | 13 | toolbar/tablist/menu/listbox/radiogroup patterns, **the scroll wedge (200 rows in a 200px box, with the scrollTop trace)**, typeahead, orientation + wrap + RTL, the one-tabbable invariant under mutation, `aria-activedescendant`, a real PageUp/PageDown, the api, events + state attributes, and a manual screen-reader walkthrough |
 | `v-observe` | 17 | all five intersect features, all six resize features, all six mutate features, `gateOnIntersect`, and all three modes on one element |
-| `v-scroll-into-view` | 14 | edge detection, `v-for`, container forms, offsets on both axes, `always`, alignment matrix, composable, state attribute, malformed-input resilience |
+| `v-scroll-into-view` | 16 | edge detection, `v-for`, **every container form plus the mount-time ref trap**, offsets on both axes, `always`, alignment matrix on both axes, composable, state attribute, malformed-input resilience, **the 192-geometry vertical parity sweep and the 36-row direction sweep** |
 | `v-select-text` | 16 | **static text: whole element, `match` by string/RegExp, ranges across nested markup**, `whitespace` collapse vs preserve, `trigger: 'click'` / `'always'` / edge (+ the deprecated `condition` alias), inputs + textareas + contenteditable, `useSelectText`, the event, text-less hosts + the `user-select: none` diagnostic |
 | `v-teleport-to` | 12 | placement + flip, every sizing knob, boundary + all three `scrollContainer` forms, overflow modes, arrow vars, cross-axis + offsets, autoUpdate, virtual reference, events + state, composable, `strategy: 'absolute'` |
 | `vue-write-behind` | 11 | **the cell does not jump — a slow server that echoes UPPERCASED, checked live against what was typed**, coalescing counters, failure + backoff + newest-value retry, `retry: false`, the four store fields, batch vs per-key `allSettled`, `discard()`, `interval` vs `debounce`, `keys`, `equals` + `set()`, `flush()` + the tab-hide hook |

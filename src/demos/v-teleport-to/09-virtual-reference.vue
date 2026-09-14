@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, useTemplateRef } from 'vue'
 import type { VirtualReference } from '@ozjsey/v-teleport-to'
 
 const open = ref(false)
+const surface = useTemplateRef<HTMLElement>('surface')
 // Any object with getBoundingClientRect() is a valid reference — cursor
 // coordinates, a selection Range, a canvas hit-test result…
 const cursor = shallowRef<VirtualReference | null>(null)
@@ -19,6 +20,15 @@ function openAt(e: MouseEvent) {
 const options = computed(() => ({
   to: cursor.value ?? undefined,
   enabled: open.value && cursor.value !== null,
+  // The fit test measures against the BOUNDARY, and the default boundary is
+  // the viewport — so "right-click near the bottom of the box and the menu
+  // opens above the cursor" used to be true only if the box itself happened to
+  // be near the bottom of your window. At 900px and 700px of viewport height it
+  // never flipped, because 260px of window remained below the box (TT-22
+  // finding 8). Clipping to the drawn surface makes the card's own sentence
+  // literally true, at any window size, and costs nothing: `boundary` treats a
+  // virtual reference exactly as it treats an element.
+  boundary: surface.value ?? ('viewport' as const),
   placement: 'bottom' as const,
   // A cursor position has no width, so `widthMultiplier` — which multiplies the
   // REFERENCE's width — projects zero and the menu renders at nothing but its
@@ -30,8 +40,8 @@ const options = computed(() => ({
 </script>
 
 <template>
-  <div class="surface" @contextmenu.prevent="openAt" @click="open = false">
-    right-click anywhere in this box
+  <div ref="surface" class="surface" @contextmenu.prevent="openAt" @click="open = false">
+    right-click anywhere in this box — near the top it opens downwards, near the bottom it flips
   </div>
 
   <div v-show="open" v-teleport-to="options" class="menu">
@@ -49,15 +59,23 @@ const options = computed(() => ({
   <p class="pg-muted">
     Two things follow from a reference with no box. <code>widthMultiplier</code> multiplies the
     reference's width, so it projects <code>0</code> here — pass <code>maxWidth</code> instead, as
-    this card does. And the fit test still runs on the bare binding: right-click near the bottom of
-    the box and the menu opens <em>above</em> the cursor rather than being clamped into the sliver
-    below it.
+    this card does. And the fit test still runs on a virtual reference: right-click near the
+    <em>bottom</em> of the box and the menu opens <em>above</em> the cursor rather than being
+    clamped into the sliver below it; right-click near the top and it opens downwards as asked.
+    This card passes <code>boundary</code> — the dashed box — so that sentence is about the box you
+    can see rather than about where your window edge happens to be. Leave <code>boundary</code> at
+    its default <code>'viewport'</code> and exactly the same thing happens against the bottom of
+    the window instead.
   </p>
 </template>
 
 <style scoped>
 .surface {
-  height: 130px;
+  /* Tall enough that a click near one edge leaves real room at the other —
+     with `boundary` set to this element, the box IS the space the fit test is
+     deciding about, so it has to be able to hold the menu on one side and not
+     on the other. */
+  height: 220px;
   display: grid;
   place-items: center;
   border: 2px dashed #b9c1d4;

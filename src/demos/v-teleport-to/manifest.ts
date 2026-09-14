@@ -6,7 +6,7 @@ const manifest: LibraryManifest = {
   tagline:
     'Viewport-aware fixed positioning relative to a reference element — dropdowns, popovers and autocompletes that escape every overflow and clip container without a wrapper component.',
   status:
-    'v1.1.0 local — 836/836 tests; the fit test measures the CONTENT, not the box the host happened to have (TT-17/18/19)',
+    'v1.1.1 — 854/854 tests; the fit test measures the CONTENT, not the box the host happened to have (TT-17/18/19), and since 1.1.1 useTeleportTo measures it AFTER the render that changed it (TT-22)',
   notes: [
     'Positioning is recomputed on scroll and resize, RAF-batched. Scroll the page or a demo container with a popover open and it tracks.',
     'A template ref is null during the render pass that reads it, so the directive always sees `to: null` on its first mounted call and positions on the update that follows. Nothing to work around — but it means `to` resolving late is the normal path, not an edge case.',
@@ -49,8 +49,9 @@ const manifest: LibraryManifest = {
     {
       file: '05-overflow.vue',
       title: "overflow: 'shift' | 'hide' | 'none'",
-      blurb: 'Keep the host on screen, or let it disappear when the reference scrolls away.',
-      tags: ['overflow', 'shift', 'hide'],
+      blurb:
+        "Keep the host on screen, or let it disappear when the reference scrolls away — and see where 'shift' has no authority at all.",
+      tags: ['overflow', 'shift', 'hide', 'offsetX', 'horizontal no-op'],
     },
     {
       file: '06-arrow.vue',
@@ -74,8 +75,9 @@ const manifest: LibraryManifest = {
     {
       file: '09-virtual-reference.vue',
       title: 'Virtual reference',
-      blurb: 'Anchor to a cursor position — any object with getBoundingClientRect() works.',
-      tags: ['VirtualReference', 'context menu'],
+      blurb:
+        'Anchor to a cursor position — any object with getBoundingClientRect() works, and the fit test runs on it like any other reference.',
+      tags: ['VirtualReference', 'context menu', 'boundary', 'flip'],
     },
     {
       file: '10-events-state.vue',
@@ -87,8 +89,15 @@ const manifest: LibraryManifest = {
       file: '11-composable.vue',
       title: 'useTeleportTo inside <Teleport to="body">',
       blurb:
-        'The escape hatch for transformed ancestors — bind the returned styles yourself, and pass the host so the fit test has something to measure.',
-      tags: ['useTeleportTo', 'styles', 'update()', 'host argument'],
+        "The escape hatch for transformed ancestors — bind the returned styles yourself, pass the host so the fit test has something to measure, and watch it re-measure after the render: `enabled` plus a `v-if` on the contents, and a reference that moves through state no option reads. Both were the composable's P0 until 1.1.1.",
+      tags: [
+        'useTeleportTo',
+        'styles',
+        'update()',
+        'host argument',
+        'reactive contents',
+        'moving reference',
+      ],
     },
     {
       file: '12-strategy-absolute.vue',
@@ -100,8 +109,8 @@ const manifest: LibraryManifest = {
       file: '13-content-measurement.vue',
       title: 'Content measurement — animated tooltips and truncation',
       blurb:
-        'A tooltip, not a menu: wrapping text whose height is decided by the width the directive writes, and a closed state that collapses the box. The verdict is the same either way.',
-      tags: ['contentHeight', 'data-teleport-truncated', 'data-teleport-state', 'placement'],
+        'A tooltip, not a menu: wrapping text whose height is decided by the width the directive writes, and a closed state that collapses the box. The verdict is the same either way — and the room is a drawn boundary, so the demo reproduces at any window size.',
+      tags: ['contentHeight', 'data-teleport-truncated', 'data-teleport-state', 'placement', 'boundary'],
     },
     {
       file: '14-vshow-order.vue',

@@ -14,11 +14,11 @@
  * exports that exist nowhere. Every one was found by a person reading
  * carefully. None by a gate.
  *
- *   pnpm docs                      # sources (picks a free port; PORT= pins one)
- *   pnpm docs:dist                 # the built dist entries — the npm reader's view
- *   ONLY=v-dropzone pnpm docs      # one package
- *   DOCS_NET=0 pnpm docs           # skip every outbound HTTP request
- *   DOCS_PACK=0 pnpm docs          # skip `npm pack`
+ *   pnpm docs:check                      # sources (picks a free port; PORT= pins one)
+ *   pnpm docs:check:dist                 # the built dist entries — the npm reader's view
+ *   ONLY=v-dropzone pnpm docs:check      # one package
+ *   DOCS_NET=0 pnpm docs:check           # skip every outbound HTTP request
+ *   DOCS_PACK=0 pnpm docs:check          # skip `npm pack`
  *
  * Five checks, per package, per `tickets/DOCS-3`:
  *

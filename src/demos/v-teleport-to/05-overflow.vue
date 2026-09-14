@@ -5,6 +5,18 @@ import type { TeleportToEventDetail } from '@ozjsey/v-teleport-to'
 const overflow = ref<'none' | 'shift' | 'hide'>('shift')
 const placement = ref<'bottom' | 'right'>('bottom')
 const multiplier = ref(3)
+// `offsetX` is on this card for one reason: it is the ONLY thing
+// `overflow: 'shift'` can move on a horizontal placement.
+//
+// For `placement: 'right'` the host's left edge starts at `parentRight +
+// offsetX`, and the shift clamp's floor is `parentRight` — shift is never
+// allowed to push the host onto its own reference. So the clamp's entire range
+// of motion is the offset gap, and at the default `offsetX: 0` the floor IS the
+// starting point: `'shift'` and `'none'` produce byte-identical boxes at every
+// rail position and every multiplier. That was measured, not inferred, and it
+// left this card's `overflow` control dead in its `right` mode (TT-22 finding
+// 7). Give it an offset and the clamp has slack to reclaim.
+const offsetX = ref(0)
 const trigger = useTemplateRef<HTMLElement>('trigger')
 const host = useTemplateRef<HTMLElement>('host')
 const strip = useTemplateRef<HTMLElement>('strip')
@@ -34,9 +46,16 @@ const options = computed(() => ({
   //     Left out, `placement: 'right'` becomes `'left'` at the same moment.
   crossAxisAlign: 'start' as const,
   flip: false,
+  offsetX: offsetX.value,
   widthMultiplier: multiplier.value,
   maxHeight: 120,
 }))
+
+// Named on the card rather than left for the reader to discover by finding that
+// nothing happens. A dead control that says nothing is how finding 7 survived.
+const shiftIsInert = computed(
+  () => placement.value === 'right' && overflow.value === 'shift' && offsetX.value === 0,
+)
 
 // `overflow` measures the HOST against the VIEWPORT, so this readout has to as
 // well — the strip is only the thing that lets you drag the reference to an
@@ -98,8 +117,24 @@ function scrollToEdge() {
       <input v-model.number="multiplier" type="range" min="1" max="6" step="0.5" />
       {{ multiplier }}×
     </label>
+    <label class="pg-label">
+      offsetX
+      <input v-model.number="offsetX" type="range" min="0" max="120" step="20" />
+      {{ offsetX }}px
+    </label>
     <button class="pg-btn" @click="scrollToEdge">Push the reference to the right edge</button>
   </div>
+
+  <p v-if="shiftIsInert" class="inert">
+    <code>'shift'</code> is a <strong>no-op here</strong>, and provably so: on a horizontal
+    placement the host's near edge already sits at the reference's far edge, which is also the
+    clamp's floor — shift may never push the host onto its own reference. At
+    <code>offsetX: 0</code> the floor <em>is</em> the starting point, so switching between
+    <code>'none'</code> and <code>'shift'</code> produces the same box to the pixel. Raise
+    <code>offsetX</code> and the clamp gains exactly that much slack to reclaim — and no more.
+    For real horizontal visibility use <code>flip</code> (on by default, and it runs first) or
+    <code>'hide'</code>.
+  </p>
 
   <div ref="strip" class="strip">
     <div class="rail">
@@ -124,10 +159,13 @@ function scrollToEdge() {
     takes over there, and the readout names which one hid the host.
   </p>
   <p class="pg-muted">
-    <code>'shift'</code> clamps the host back inside the viewport along the placement axis (for
-    horizontal placements it also refuses to overlap the reference — that invariant wins, so pair it
-    with an explicit <code>placement</code> if you need hard visibility; flipping is on by default).
-    <code>'hide'</code> hides the host with <code>visibility: hidden</code> (plus a
+    <code>'shift'</code> clamps the host back inside the viewport along the placement axis. For a
+    <strong>vertical</strong> placement that axis is horizontal and the clamp has the whole
+    viewport width to work with, which is the case this card was built around. For a
+    <strong>horizontal</strong> placement the clamp is bounded below by the reference's own edge,
+    so all it can ever reclaim is the <code>offsetX</code> gap — set that to <code>0</code> and it
+    does nothing at all. <code>'hide'</code> hides the host with <code>visibility: hidden</code>
+    (plus a
     <code>data-teleport-hidden</code> marker) once the <strong>host's own box</strong> crosses a
     viewport edge — never <code>display</code>, which stays yours for <code>v-show</code> /
     <code>v-if</code>. <code>'none'</code> is the default and lets it hang off the edge.
@@ -174,6 +212,16 @@ function scrollToEdge() {
 .status {
   font-variant-numeric: tabular-nums;
   margin: 0.4rem 0 0.6rem;
+}
+.inert {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 .pop {
   /* Without this the host can never overflow and the card cannot demonstrate

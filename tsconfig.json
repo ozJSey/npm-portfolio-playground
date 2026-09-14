@@ -24,7 +24,18 @@
       // works perfectly. Add a line here when a tab starts using a new export.
       "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
       "@ozjsey/v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
+      // Added for SIV-6: card 03 writes `container: paneRef.value`, whose type
+      // is `HTMLElement | null`, and the `null` arm of `ContainerRef` only
+      // exists from 1.3.1. Without this line the tab was type-checked against
+      // the 1.2.0 `.d.ts` in node_modules while the page ran 1.3.x source.
+      "@ozjsey/v-scroll-into-view": ["../v-scroll-into-view/vScrollIntoView.ts"],
       "@ozjsey/v-teleport-to": ["../v-teleport-to/vTeleportTo.ts"],
+      // Added for WBC-7: card 11 imports `WriteBehindAttempt` and calls
+      // `flush('unload')`, neither of which exists in the 0.1.0 `.d.ts` sitting
+      // in node_modules. The engine is mapped too, because the adapter's source
+      // imports it by bare specifier and it is not on the registry at all yet.
+      "@ozjsey/vue-write-behind": ["../vue-write-behind/vueWriteBehind.ts"],
+      "@ozjsey/write-behind": ["../write-behind/writeBehind.ts"],
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "scripts/**/*.mjs"]

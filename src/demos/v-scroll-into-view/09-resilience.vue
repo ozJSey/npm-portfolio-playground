@@ -49,7 +49,11 @@ function fire() {
       broken <code>container</code> has said so once, in a sentence you can search for. Silence was
       the actual complaint — <code>container</code> deliberately refuses to fall back to native
       <code>scrollIntoView</code>, so a typo in a selector produced a scroll that never happened and
-      nothing to grep for. The warnings are latched per message, so a thousand rows warn once.
+      nothing to grep for. Each element says each sentence once: through 1.3.0 the latch was
+      global per message, so the FIRST element to reach one spent it for the session and every
+      broken row after it was silent again — a diagnostic that looked like one. Six bindings
+      are broken above and they all reach the same sentence; the console should hold six
+      copies of it, not one.
     </p>
   </div>
 </template>

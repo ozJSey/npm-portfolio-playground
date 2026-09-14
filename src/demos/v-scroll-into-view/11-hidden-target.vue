@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, useTemplateRef } from 'vue'
+import type { VScrollIntoViewOptions } from '@ozjsey/v-scroll-into-view'
 
 const withContainer = ref(true)
 const shown = ref(false)
@@ -9,8 +10,20 @@ const paneRef = useTemplateRef<HTMLElement>('pane')
 
 const START = 300
 
-function container() {
-  return withContainer.value ? (paneRef.value ?? undefined) : undefined
+/**
+ * The whole binding, not just the container, because "no container" is spelled
+ * by leaving the KEY OUT — not by setting it to `undefined`. Both reach the
+ * native path; only the second is indistinguishable from
+ * `container: paneRef.value ?? undefined`, which is a template ref that has not
+ * been assigned yet and is the trap card 03 is about. Since 1.3.1 the
+ * directive warns about that spelling, so the demo uses the honest one.
+ *
+ * The getter form is deliberate too: `paneRef.value` read here would be `null`
+ * on the first render.
+ */
+function options(): VScrollIntoViewOptions {
+  const base: VScrollIntoViewOptions = { condition: go.value, block: 'start' }
+  return withContainer.value ? { ...base, container: () => paneRef.value } : base
 }
 
 function report(): void {
@@ -51,7 +64,7 @@ function jump(): void {
     <p
       v-show="shown"
       class="target"
-      v-scroll-into-view="{ condition: go, container: container(), block: 'start' }"
+      v-scroll-into-view="options()"
     >
       🎯 the target
     </p>

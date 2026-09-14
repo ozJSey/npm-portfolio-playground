@@ -517,6 +517,24 @@ const CHECKS = [
       }
     },
   },
+  {
+    demo: '11-flush-and-tab-hide.vue',
+    name: "flush('unload') hands the writer final: true — the flag keepalive hangs off",
+    fn: async () => {
+      await __wb.type('11-flush-and-tab-hide.vue', 0, 'last-keystroke')
+      __pg.button('11-flush-and-tab-hide.vue', "flush('unload')").click()
+      await __pg.sleep(1200)
+      const left = __wb.log('11-flush-and-tab-hide.vue', 0)
+      const right = __wb.log('11-flush-and-tab-hide.vue', 1)
+
+      return {
+        pass:
+          /PUT draft "last-keystroke" reason=unload final=true attempt=1/.test(left) &&
+          right.startsWith('nothing sent yet'),
+        detail: `left="${left}" right="${right}"`,
+      }
+    },
+  },
 ]
 
 export default {

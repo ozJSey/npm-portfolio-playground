@@ -28,8 +28,18 @@ const trigger = useTemplateRef<HTMLElement>('trigger')
 
 // `boundary` clips the available-space math to this box instead of the
 // viewport, so the decision is about the box: reproducible wherever the page
-// happens to be scrolled, and — unlike a reference pinned in a page column —
-// horizontal space actually varies, so the horizontal flip is reachable.
+// happens to be scrolled, and at whatever size the window is.
+//
+// The horizontal ladder is reachable too, but NOT from either slider — both of
+// them move the popover's height or the reference's vertical position, and
+// horizontal space is untouched by both. It moves when you scroll the BOX
+// sideways: the canvas inside is 680px wide in a 420px box, so dragging it
+// carries the reference between the two edges. Measured across that range with
+// a 204–213px popover: `right` → `left/flipped` at the left end, `neither` in
+// the middle from either side, and `left` → `right/flipped` at the right end.
+// This comment used to claim the boundary itself was what made horizontal
+// space vary, which sent readers hunting for it on the sliders (TT-22
+// finding 8).
 //
 // `maxHeight: 400` sits above everything the content slider can produce, so the
 // clamp never becomes the binding constraint and the fit test is always
@@ -200,9 +210,12 @@ function onPositioned(e: Event) {
     <code>detail.availableSpace</code> / <code>detail.oppositeSpace</code>.
   </p>
   <p class="pg-muted">
-    Horizontally the box is deliberately too narrow: scroll it sideways and across most of the
-    range the popover is wider than <em>either</em> side, so <code>left</code> and
-    <code>right</code> produce <code>neither</code> too. The host carries
+    <strong>Neither slider changes horizontal space</strong> — for the horizontal half of the
+    ladder, pick <code>left</code> or <code>right</code> and scroll the box <em>sideways</em>. The
+    canvas is 680px wide inside a 420px box, so dragging it carries the reference from one edge to
+    the other: at the left end <code>right</code> flips to <code>left</code>, at the right end
+    <code>left</code> flips to <code>right</code>, and across the middle the popover is wider than
+    <em>either</em> side, so both produce <code>neither</code>. The host carries
     <code>data-teleport-fit</code>
     (<code>fits</code> / <code>flipped</code> / <code>neither</code> / <code>unmeasured</code>) and
     the event carries the same value as <code>detail.fit</code>.

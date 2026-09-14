@@ -60,21 +60,26 @@ function jump() {
   </div>
 
   <div id="grid-pane" class="grid-pane">
-    <div v-for="cell in 64" :key="cell" class="cell" :class="{ target: cell === 27 }">
-      <span
-        v-if="cell === 27"
-        v-scroll-into-view="{
-          condition: go,
-          container: '#grid-pane',
-          behavior,
-          block,
-          inline,
-          offset: { top: offsetTop, left: offsetLeft },
-        }"
-        >🎯</span
-      >
-      <template v-else>{{ cell }}</template>
+    <div v-for="cell in 55" :key="cell" class="cell">{{ cell }}</div>
+    <!--
+      The directive is on the CELL, not on a glyph inside it. Bound to the 23px
+      emoji, `block: 'start'` aligned the emoji and visibly clipped the cell the
+      eye reads as the target — the demo disagreed with itself.
+    -->
+    <div
+      class="cell target"
+      v-scroll-into-view="{
+        condition: go,
+        container: '#grid-pane',
+        behavior,
+        block,
+        inline,
+        offset: { top: offsetTop, left: offsetLeft },
+      }"
+    >
+      🎯
     </div>
+    <div v-for="cell in 72" :key="`a${cell}`" class="cell">{{ cell + 56 }}</div>
   </div>
 </template>
 
@@ -86,7 +91,22 @@ function jump() {
   border: 1px solid var(--stage-border);
   border-radius: 8px;
   display: grid;
-  grid-template-columns: repeat(8, 8rem);
+  /*
+    16 columns, not 8. At 8 the content was 1024px inside a ~937px scrollport,
+    so the whole horizontal range was 87px: `center`, `end` and `nearest` all
+    landed on `scrollLeft 0` and only `start` moved, by clamping to the maximum.
+    The control advertised "every native alignment including the horizontal
+    axis" and was inert at desktop width. Four distinct answers need the target
+    to be reachable from both ends, which needs content wider than
+    2 x scrollport - cell: 2048px does it, and leaves the target (cell 56, row 4
+    column 8) at x 1024-1152 with a maximum scroll of ~1111.
+
+    Eight rows, not six: `offset.top: -40` on a start alignment asks the pane to
+    go 40px PAST the target, and with six rows that request clamped at the
+    scroll maximum, so the card stopped demonstrating negative offsets. 128
+    cells over 16 columns keeps the 640px content height the 8-column grid had.
+  */
+  grid-template-columns: repeat(16, 8rem);
   grid-auto-rows: 5rem;
 }
 .cell {
