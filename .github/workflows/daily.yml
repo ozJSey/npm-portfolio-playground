@@ -11,17 +11,24 @@ permissions:
   pages: write
   id-token: write
 
+# pages.yml deploys on every push to main. Without this, a scheduled run and a
+# push can hand GitHub Pages two different builds at the same time and the
+# winner is whichever finishes last.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   verify-npm:
     env:
       PLAYGROUND_USE_NPM: '1'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
-      - uses: actions/setup-node@v4
+          version: 10
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -45,11 +52,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
-      - uses: actions/setup-node@v4
+          version: 10
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
