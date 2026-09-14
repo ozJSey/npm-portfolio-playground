@@ -24,21 +24,22 @@
     "smoke:dist": "PLAYGROUND_TARGET=dist node scripts/smoke.mjs",
     "test:npm": "node scripts/npm-e2e.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "typecheck:libs": "node scripts/typecheck-libs.mjs"
+    "typecheck:libs": "node scripts/typecheck-libs.mjs",
+    "refresh:npm": "node scripts/refresh-npm-packages.mjs"
   },
   "dependencies": {
-    "@ozjsey/bigdecimal-string": "^1.1.0",
-    "@ozjsey/dependency-grouper": "^0.3.5",
-    "@ozjsey/v-copy": "^1.1.0",
-    "@ozjsey/v-dropzone": "^0.1.0",
-    "@ozjsey/v-fit-children": "^2.2.0",
-    "@ozjsey/v-keyboard-navigation": "^0.1.0",
-    "@ozjsey/v-observe": "^0.1.0",
-    "@ozjsey/v-scroll-into-view": "^1.2.0",
-    "@ozjsey/v-select-text": "^2.1.0",
-    "@ozjsey/v-teleport-to": "^3.0.0",
-    "@ozjsey/vue-write-behind": "^0.1.0",
-    "vue": "^3.5.13"
+    "@ozjsey/bigdecimal-string": "1.2.0",
+    "@ozjsey/dependency-grouper": "0.3.5",
+    "@ozjsey/v-copy": "1.2.0",
+    "@ozjsey/v-dropzone": "0.1.1",
+    "@ozjsey/v-fit-children": "2.3.0",
+    "@ozjsey/v-keyboard-navigation": "0.3.0",
+    "@ozjsey/v-observe": "0.1.0",
+    "@ozjsey/v-scroll-into-view": "1.3.0",
+    "@ozjsey/v-select-text": "1.0.0",
+    "@ozjsey/v-teleport-to": "1.1.0",
+    "@ozjsey/vue-write-behind": "0.1.1",
+    "vue": "3.5.42"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.0",

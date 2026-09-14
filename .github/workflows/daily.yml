@@ -13,6 +13,8 @@ permissions:
 
 jobs:
   verify-npm:
+    env:
+      PLAYGROUND_USE_NPM: '1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +25,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm refresh:npm
+      - run: pnpm install --lockfile-only --ignore-scripts
+      - run: pnpm install --frozen-lockfile
       - run: pnpm test:npm
       - run: pnpm audit:npm
       - run: pnpm typecheck
@@ -34,6 +38,8 @@ jobs:
 
   deploy:
     needs: verify-npm
+    env:
+      PLAYGROUND_USE_NPM: '1'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -47,7 +53,9 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm refresh:npm
+      - run: pnpm install --lockfile-only --ignore-scripts
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
