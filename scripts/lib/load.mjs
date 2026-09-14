@@ -101,6 +101,29 @@ export function watchCpu({ everyMs = 2000, saturated = DEFAULT_SATURATED } = {})
 export async function assertQuietEnough(command, { max = DEFAULT_MAX } = {}) {
   const utilization = await cpuUtilization()
   const pct = (n) => `${Math.round(n * 100)}%`
+
+  /**
+   * CI is the one place where a busy box is not a reason to stop.
+   *
+   * `.github/workflows/daily.yml` runs `pnpm interactions` on a 2-core
+   * ubuntu-latest runner that is dedicated to this job — so high utilization
+   * there means *our own* Vite and Chrome working, not a neighbour's build
+   * stealing the renderer. Refusing would turn a green scheduled job red for
+   * the very condition it is supposed to operate under, which is the
+   * false-failure this gate exists to prevent, inverted.
+   *
+   * So: measure, say the number out loud, and carry on. The in-run watcher
+   * still samples, so a genuinely pathological runner still gets reported at
+   * the end rather than silently producing numbers nobody questions.
+   */
+  if (process.env.CI) {
+    console.log(
+      `  CI: ${os.cpus().length} cores, ${pct(utilization)} busy at start. ` +
+        `The load gate does not refuse on a dedicated runner (PG-24); results are still stamped if it saturates.`,
+    )
+    return { utilization, max, degraded: false, ci: true }
+  }
+
   if (utilization < max) return { utilization, max, degraded: false }
 
   const lines = [
