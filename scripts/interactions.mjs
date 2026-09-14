@@ -16,6 +16,12 @@
  *   pnpm interactions:dist                 # the built dist entries
  *   ONLY=07-api pnpm interactions          # one card
  *   CHROME_PATH=/path/to/chrome pnpm interactions
+ *   ALLOW_BUSY=1 pnpm interactions        # run on a busy box; results stamped suspect
+ *
+ * It refuses to start when the machine is already busy, because the checks below
+ * time debounce windows and in-flight writes in a real renderer and a contended
+ * box turns them red for reasons that are not defects — see `lib/load.mjs` and
+ * BOARD.md -> PG-24.
  *
  * Add a library: drop `scripts/interactions/<library-id>.mjs` beside the
  * others, default-exporting `{ library, prelude?, checks, nativeChecks? }`,
@@ -34,6 +40,7 @@ import { Cdp, CdpCommandError, launchChrome, newPage, throughReload } from './li
 import { waitForBoot } from './lib/boot.mjs'
 import { readManifests } from './lib/manifests.mjs'
 import { freePort, resolvePort } from './lib/port.mjs'
+import { assertQuietEnough, loadVerdict, watchCpu } from './lib/load.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
@@ -196,6 +203,16 @@ if (!existsSync(BASELINE_PATH)) {
   process.exit(2)
 }
 const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
+
+// PG-24. Before a single process is started: is this box quiet enough to time
+// anything on it? The last run made under load reported 134 failures against a
+// commit that passes 330/330 alone, and 134 is too many to read, so the one real
+// regression among them would never have been found.
+const preflight = await assertQuietEnough('pnpm interactions')
+// And keep watching, because the run that produced the unreproducible
+// `v-keyboard-navigation/14-skipping.vue` red started on a quiet machine and was
+// joined mid-flight by another agent's refactor.
+const loadWatch = watchCpu()
 
 const viteBin = join(ROOT, 'node_modules/.bin/vite')
 const server = spawn(existsSync(viteBin) ? viteBin : 'vite', ['--port', String(PORT), '--strictPort'], {
@@ -472,6 +489,8 @@ if (regressed) {
 }
 if (unknownDemoRefs.length) console.log(`  ${unknownDemoRefs.length} check(s) name a demo that does not exist — see SPEC BUG above.`)
 if (ONLY) console.log(`  Filtered run (ONLY=${process.env.ONLY}); the pass count above is partial.`)
+const load = loadVerdict(preflight, loadWatch.stop())
+if (load) console.log(load)
 console.log(rule)
 
 process.exit(failed.length || regressed ? 1 : 0)

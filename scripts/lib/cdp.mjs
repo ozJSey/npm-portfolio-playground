@@ -30,12 +30,45 @@
  * A check that needs to survive a reload should not be doing that silently:
  * catch the error and say so. See `scripts/interactions/vue-write-behind.mjs`,
  * whose stamp-the-document trick this generalises.
+ *
+ * ## PG-21, second pass: the deadline fired, and the run hung anyway
+ *
+ * Measured, 2026-09-15: a `Runtime.evaluate` on a promise that never settles is
+ * rejected in 3004 ms against a 3000 ms deadline. The clock above works. And a
+ * `pnpm interactions` run still hung for 14 minutes at 0% CPU with Chrome, Vite
+ * and an ESTABLISHED debugging socket all alive, and had to be killed by hand —
+ * so a deadline on `send` was never the whole answer, because **`send` was
+ * never the only place this file waits.** Three others had no clock at all:
+ *
+ *   - `launchChrome`'s `/json/version` poll. `fetch` has no default timeout, so
+ *     one attempt that connects and is never answered eats the entire 60-try
+ *     retry budget the loop appears to have. Its symptom is exactly the one
+ *     observed: an ESTABLISHED socket to the debugging port and a node process
+ *     with nothing to do.
+ *   - `Cdp.connect`'s WebSocket handshake, which fires neither `open` nor
+ *     `error` when the upgrade response never arrives.
+ *   - anything a spec does with the raw `cdp`/`page` handle it is given.
+ *
+ * The first two are now on clocks. The third cannot be, from here — which is
+ * the point of the fourth guarantee:
+ *
+ *   3. **A stall watchdog.** Progress is "a CDP command settled". If nothing
+ *      settles for `CDP_STALL_MS` while nothing is in flight — or if something
+ *      in flight outlives its own deadline, meaning the clock in `send` did not
+ *      fire — the run prints what it was doing, kills Chrome and the dev server,
+ *      and exits 3. It is not attached to any one `await`, so it does not need
+ *      to know which one is stuck. See `scripts/lib/watchdog.mjs`.
+ *
+ * Negative control for all of it, per BOARD.md's standing criteria:
+ *
+ *     node scripts/lib/cdp.mjs           # drives a real Chrome into a real hang
  */
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { EXIT_WEDGED, installExitCleanup, registerChild, startWatchdog } from './watchdog.mjs'
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -45,8 +78,79 @@ const CHROME_CANDIDATES = [
   '/usr/bin/chromium',
 ].filter(Boolean)
 
+/**
+ * Read a millisecond budget from the environment, or refuse to start.
+ *
+ * `Number('')` is 0 and `Number('30s')` is NaN, and the old
+ * `Number(process.env.CDP_TIMEOUT_MS ?? 30_000)` turned both of those into a
+ * *silently disabled* deadline — `timeout > 0` is false for each. A typo in the
+ * one variable whose job is to bound the run would have restored the original
+ * PG-21 hang, and nothing would have said so. Fail at import instead.
+ */
+function msFromEnv(name, raw, fallback, { zeroDisables = false } = {}) {
+  if (raw === undefined || raw === '') return fallback // `FOO=` is how a shell unsets
+  const n = Number(raw)
+  if (zeroDisables && n === 0) return 0
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(
+      `${name}=${JSON.stringify(raw)} is not a positive number of milliseconds.\n` +
+        `Refusing to start rather than run with the deadline it was supposed to set quietly ` +
+        `switched off — that is the PG-21 hang with extra steps. Unset it for the ${fallback}ms default` +
+        (zeroDisables ? `, or set it to 0 to disable this guard on purpose.` : `.`),
+    )
+  }
+  return n
+}
+
 /** Per-command deadline. Generous: a cold `Runtime.evaluate` can take seconds. */
-export const DEFAULT_TIMEOUT_MS = Number(process.env.CDP_TIMEOUT_MS ?? 30_000)
+export const DEFAULT_TIMEOUT_MS = msFromEnv('CDP_TIMEOUT_MS', process.env.CDP_TIMEOUT_MS, 30_000)
+
+/**
+ * How long the whole run may make no progress before it is declared wedged.
+ *
+ * Chosen against what this suite actually does, not rounded off a hunch. The
+ * longest windows in which a *healthy* run legitimately issues no CDP command
+ * at all, measured by reading the specs:
+ *
+ *   | source                                                   |     ms |
+ *   |----------------------------------------------------------|--------|
+ *   | `v-select-text` native checks — `await wait(9000)`        |  9 000 |
+ *   | `interactions.mjs` — settle after `fresh()` navigates     |  2 200 |
+ *   | `throughReload` — backoff between attempts                |  1 200 |
+ *   | worst case, if all three land back to back                | 12 400 |
+ *
+ * So ~12.4 s is the ceiling on healthy silence, and 120 000 ms is ~10x it. The
+ * other direction matters just as much: this must never cut short work that is
+ * slow *on purpose*, and `geometry.mjs` spends up to `GEOMETRY_PROBE_BUDGET_MS`
+ * (300 000 ms) inside a single `Runtime.evaluate`. It does not have to be
+ * special-cased, because while any command is in flight the watchdog defers to
+ * **that command's own deadline** rather than to this number — see
+ * `diagnoseStall`. This budget only ever applies when nothing is in flight,
+ * which is precisely the state no other clock in this file covers.
+ *
+ * Two minutes is also short enough to be a diagnosis rather than a CI job
+ * timeout, which is the whole complaint: 14 minutes of silence produced no
+ * verdict, and a job timeout produces no verdict either.
+ *
+ * `CDP_STALL_MS=0` disables it, for a script that legitimately parks a CDP
+ * connection while it does something else for minutes.
+ */
+export const DEFAULT_STALL_MS = msFromEnv('CDP_STALL_MS', process.env.CDP_STALL_MS, 120_000, {
+  zeroDisables: true,
+})
+
+/**
+ * Slack on top of a command's own deadline before the watchdog calls it dead.
+ *
+ * Only reached when the `setTimeout` in `send` did not fire — an event loop
+ * starved by a page that is pegging the CPU, or a bug here. It has to be wide
+ * enough not to race a timer that is merely late on a loaded box (PG-24 measured
+ * this machine at 100% all-core under 20 spinning processes).
+ */
+const STALL_GRACE_MS = 5_000
+
+/** How long `Cdp.connect` waits for the WebSocket upgrade before giving up. */
+export const DEFAULT_HANDSHAKE_MS = 15_000
 
 /**
  * Commands whose whole job is to tear down the execution context they run in.
@@ -69,7 +173,28 @@ export function findChrome() {
   return found
 }
 
-export async function launchChrome({ port = 9333, headless = true, windowSize = '1280,1400' } = {}) {
+export async function launchChrome({
+  port = 9333,
+  headless = true,
+  windowSize = '1280,1400',
+  /**
+   * Total budget for "Chrome is serving CDP".
+   *
+   * The loop this replaces was `for (i = 0; i < 60; i++)` with a 250 ms sleep,
+   * i.e. 15 s of sleeping plus 60 unbounded `fetch` round trips — a budget with
+   * no ceiling, which is the bug. 30 s is deliberately the generous reading of
+   * that: PG-24 measured this machine pinned at 100% all-core by a neighbouring
+   * agent, and a cold Chrome start under that is slow but not broken. The point
+   * here is that the budget *exists*, not that it is tight.
+   */
+  bootMs = 30_000,
+  /** Per-attempt budget for the `/json/version` probe. See PG-21 below. */
+  probeMs = 2_000,
+} = {}) {
+  // Whatever happens next, the browser must not outlive this process. The
+  // 14-minute hang left an orphan Chrome holding its profile directory until it
+  // was killed by hand; `installExitCleanup` is what makes Ctrl-C enough.
+  installExitCleanup()
   const userDataDir = mkdtempSync(join(tmpdir(), 'dz-cdp-'))
   const args = [
     `--remote-debugging-port=${port}`,
@@ -83,20 +208,43 @@ export async function launchChrome({ port = 9333, headless = true, windowSize = 
     'about:blank',
   ]
   if (headless) args.unshift('--headless=new')
-  const proc = spawn(findChrome(), args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  // `detached` so Chrome gets its own process group: the browser, the GPU
+  // process and one renderer per tab are a *tree*, and SIGKILLing only the
+  // browser reparents the rest to init, where they sit on 300 MB and the
+  // profile directory. `watchdog.mjs` kills the group, which needs one.
+  const proc = spawn(findChrome(), args, { stdio: ['ignore', 'pipe', 'pipe'], detached: true })
+  registerChild(proc)
   let log = ''
   proc.stdout.on('data', (c) => (log += c))
   proc.stderr.on('data', (c) => (log += c))
 
   let version
-  for (let i = 0; i < 60; i++) {
+  const deadline = Date.now() + bootMs
+  let attempts = 0
+  while (Date.now() < deadline) {
+    attempts++
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/version`)
+      // PG-21. `fetch` has NO default timeout, and this loop only *looks* like
+      // it has a retry budget: Chrome binds the debugging port before it can
+      // serve on it, so an attempt can connect and then wait for a response
+      // that never comes — forever, consuming every remaining retry as one
+      // `await` that never returns. That is the exact shape of the observed
+      // hang (ESTABLISHED socket to the debugging port, node at 0% CPU), and
+      // it is why the retry count is now a wall-clock deadline instead.
+      const res = await fetch(`http://127.0.0.1:${port}/json/version`, {
+        signal: AbortSignal.timeout(probeMs),
+      })
       if (res.ok) { version = await res.json(); break }
-    } catch { /* not up */ }
+    } catch { /* not up yet, or this attempt hit its own deadline */ }
     await sleep(250)
   }
-  if (!version) { proc.kill('SIGKILL'); throw new Error(`Chrome never exposed CDP:\n${log}`) }
+  if (!version) {
+    proc.kill('SIGKILL')
+    throw new Error(
+      `Chrome never exposed CDP on port ${port}: ${attempts} probe(s) over ${bootMs}ms, each capped ` +
+        `at ${probeMs}ms, none answered /json/version.\n${log}`,
+    )
+  }
   return { proc, wsUrl: version.webSocketDebuggerUrl, port }
 }
 
@@ -173,16 +321,54 @@ export async function throughReload(fn, { attempts = 3, onRetry } = {}) {
   )
 }
 
+/**
+ * One line saying what a command was *about*, for the stall diagnostic.
+ *
+ * Kept deliberately dumb and lossy: it is read by a human at the moment a run
+ * has already gone wrong, so the only requirement is that it be enough to
+ * identify the card. For `Runtime.evaluate` that falls out for free —
+ * `interactions.mjs` compiles the check body into the expression and every
+ * check opens by naming its demo file.
+ */
+function fingerprint(method, params) {
+  const one = (v) => String(v).replace(/\s+/g, ' ').trim().slice(0, 200)
+  if (params?.expression) return one(params.expression)
+  if (params?.functionDeclaration) return one(params.functionDeclaration)
+  if (params?.url) return one(params.url)
+  if (method.startsWith('Input.')) {
+    return one(`${params?.type ?? '?'} ${params?.key ?? ''} at ${params?.x ?? '?'},${params?.y ?? '?'}`)
+  }
+  if (params?.origin) return one(params.origin)
+  return ''
+}
+
 export class Cdp {
-  constructor(ws, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  constructor(ws, { timeoutMs = DEFAULT_TIMEOUT_MS, stallMs = DEFAULT_STALL_MS } = {}) {
     this.ws = ws
     this.id = 0
     this.timeoutMs = timeoutMs
+    this.stallMs = stallMs
     this.pending = new Map()
     this.listeners = new Map()
     this.closed = false
     /** Every main-frame navigation this client saw — the contamination meter. */
     this.navigations = []
+    /**
+     * The progress clock. A command *settling* is the only thing counted, and
+     * CDP events deliberately are not: a page that keeps logging to the console
+     * would otherwise keep a thoroughly wedged run looking alive forever.
+     */
+    this.lastSettledAt = Date.now()
+    this.lastSettled = null
+    // PG-21. Nothing below this line knows where the run might get stuck, and
+    // that is the design: `send` is on a clock, but `send` was never the only
+    // place this harness waits.
+    this.watchdog = stallMs > 0
+      ? startWatchdog({
+          diagnose: () => this.diagnoseStall(),
+          onFire: () => { try { this.ws.close() } catch { /* already gone */ } },
+        })
+      : null
 
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(ev.data)
@@ -242,10 +428,27 @@ export class Cdp {
   }
 
   static async connect(wsUrl, options) {
+    const handshakeMs = options?.handshakeMs ?? DEFAULT_HANDSHAKE_MS
     const ws = new WebSocket(wsUrl)
     await new Promise((resolve, reject) => {
-      ws.addEventListener('open', resolve, { once: true })
-      ws.addEventListener('error', () => reject(new Error('CDP socket failed')), { once: true })
+      // PG-21. The second unbounded `await` in this file. `open` and `error`
+      // are the only two events this ever waited on, and a socket that is
+      // accepted at the TCP level but never completes the HTTP upgrade emits
+      // neither — so a Chrome that is alive but wedged parked the whole run
+      // here, before a single line of output, with nothing to show for it.
+      const timer = setTimeout(() => {
+        try { ws.close() } catch { /* never opened */ }
+        reject(
+          new Error(
+            `CDP WebSocket handshake to ${wsUrl} did not complete within ${handshakeMs}ms. ` +
+              `The port answered /json/version, so Chrome is up but not talking — usually a browser ` +
+              `left over from an earlier run holding the port. Check for a stray Chrome.`,
+          ),
+        )
+      }, handshakeMs)
+      const done = (fn, value) => { clearTimeout(timer); fn(value) }
+      ws.addEventListener('open', () => done(resolve), { once: true })
+      ws.addEventListener('error', () => done(reject, new Error('CDP socket failed')), { once: true })
     })
     return new Cdp(ws, options)
   }
@@ -285,6 +488,109 @@ export class Cdp {
     }
   }
 
+  /**
+   * The watchdog's only question: is this run still making progress?
+   *
+   * Two states, because they mean opposite things and want different budgets.
+   *
+   * **Something is in flight.** Its own deadline is the promise that was made
+   * about it, so anything short of that is healthy *by definition* — this is
+   * what lets `geometry.mjs` spend five minutes inside one `Runtime.evaluate`
+   * without being killed for it. Past that deadline plus `STALL_GRACE_MS` means
+   * the `setTimeout` in `send` did not fire, which is a fault in this file, not
+   * in the page, and is worth saying out loud.
+   *
+   * **Nothing is in flight.** Then no other clock in this file is running at
+   * all, and `DEFAULT_STALL_MS` is the only thing standing between a wedge
+   * somewhere else — `fetch`, a spec helper, the dev server — and another
+   * 14-minute silence.
+   *
+   * @returns {string|null} the diagnostic, or null while the run is healthy
+   */
+  diagnoseStall() {
+    if (this.closed) return null
+    const now = Date.now()
+    const inFlight = [...this.pending.values()]
+
+    if (inFlight.length) {
+      const overdue = inFlight.filter((e) => {
+        const budget = e.timeout > 0 ? e.timeout : this.stallMs
+        return now - e.startedAt > budget + STALL_GRACE_MS
+      })
+      if (!overdue.length) return null
+      // Two different faults share this branch and must not be reported as one
+      // another: a command that HAD a deadline and outlived it means the timer
+      // in `send` did not fire, which is a bug in this file. A command sent
+      // with `{ timeout: 0 }` never had one, and is exactly the documented
+      // escape hatch this watchdog exists to keep honest.
+      const unclocked = overdue.filter((e) => !(e.timeout > 0)).length
+      return this.stallReport(now, inFlight, {
+        why:
+          `${overdue.length} of ${inFlight.length} in-flight CDP command(s) outlived their own ` +
+          `deadline by more than ${STALL_GRACE_MS}ms — ` +
+          (unclocked === overdue.length
+            ? `sent with { timeout: 0 }, so nothing but this watchdog was ever going to end them`
+            : unclocked
+              ? `${unclocked} of them with no deadline at all; for the rest the per-command timer did not fire`
+              : `the per-command timer did not fire`),
+      })
+    }
+
+    const quietFor = now - this.lastSettledAt
+    if (quietFor <= this.stallMs) return null
+    return this.stallReport(now, inFlight, {
+      why:
+        `no CDP command has settled for ${quietFor}ms and none is in flight, so nothing in this ` +
+        `client is on a clock — the run is waiting on something else`,
+    })
+  }
+
+  /**
+   * The message the 14-minute hang never printed.
+   *
+   * "Timed out" on its own would repeat the defect in a new colour, so this
+   * names the method, the elapsed time, and — this is the one that matters when
+   * you are reading it at 2am — *which card* was being driven. It is knowable
+   * here without any cooperation from the runner: `interactions.mjs` compiles
+   * each check into the `Runtime.evaluate` expression, and every check opens by
+   * naming its demo file (`__pg.stage('09-contenteditable.vue')`). Navigating
+   * to `?run=N#<library>` pins the tab the same way.
+   */
+  stallReport(now, inFlight, { why }) {
+    const ago = (t) => `${now - t}ms ago`
+    const nav = this.navigations.at(-1)
+    const lines = [
+      `CDP STALL — this run is wedged and will not produce a verdict (PG-21).`,
+      ``,
+      `  why .............. ${why}`,
+      `  last settled ..... ${this.lastSettled
+        ? `${this.lastSettled.method} (${ago(this.lastSettled.at)})${this.lastSettled.describe ? `\n                     ${this.lastSettled.describe}` : ''}`
+        : 'nothing has ever settled on this connection'}`,
+      `  last navigation .. ${nav ? `${nav.url} (${ago(nav.at)})` : 'none seen'}`,
+      `  navigations ...... ${this.navigations.length}`,
+      `  in flight ........ ${inFlight.length || 'nothing'}`,
+    ]
+    for (const e of inFlight) {
+      lines.push(
+        `      ${e.method} — ${now - e.startedAt}ms in flight, ` +
+          `${e.timeout > 0 ? `${e.timeout}ms deadline` : 'NO deadline (timeout: 0)'}` +
+          `${e.sessionId ? `, session ${e.sessionId.slice(0, 8)}…` : ''}`,
+      )
+      if (e.describe) lines.push(`        ${e.describe}`)
+    }
+    lines.push(
+      ``,
+      `Chrome and every child of this process (the Vite dev server included) are being killed now, ` +
+        `so nothing is left holding a port or a profile directory. Exit code ${EXIT_WEDGED} means ` +
+        `"no verdict", which is a different thing from "checks failed" (1) or "refused to run" (2).`,
+      ``,
+      `If the work above is genuinely this slow, raise the budget it belongs to rather than this one: ` +
+        `CDP_TIMEOUT_MS (per command, now ${this.timeoutMs}ms) or CDP_STALL_MS (no progress at all, ` +
+        `now ${this.stallMs}ms; 0 disables).`,
+    )
+    return lines.join('\n')
+  }
+
   /** Fail only the commands belonging to one session — a closed or crashed tab. */
   abandonSession(sessionId, detail) {
     if (!sessionId) return
@@ -311,12 +617,18 @@ export class Cdp {
     const { timeout = this.timeoutMs, survivesNavigation = NAVIGATING_METHODS.has(method) } = options
     const id = ++this.id
     const startedAt = Date.now()
+    const describe = fingerprint(method, params)
 
     return new Promise((resolve, reject) => {
       const settle = (fn, value) => {
         if (!this.pending.has(id)) return
         this.pending.delete(id)
         if (entry.timer) clearTimeout(entry.timer)
+        // The progress tick the watchdog reads. Recorded on *any* outcome —
+        // a run that is failing every command is still a run that is moving,
+        // and only silence means wedged.
+        this.lastSettledAt = Date.now()
+        this.lastSettled = { method, describe, at: this.lastSettledAt }
         fn(value)
       }
       const entry = {
@@ -324,6 +636,8 @@ export class Cdp {
         sessionId,
         startedAt,
         survivesNavigation,
+        timeout,
+        describe,
         timer: null,
         resolve: (v) => settle(resolve, v),
         reject: (e) => settle(reject, e),
@@ -338,7 +652,11 @@ export class Cdp {
               detail:
                 `no reply within ${timeout}ms. Chrome is alive but never answered — a page that reloaded ` +
                 `without emitting Page.frameNavigated, an evaluate that never settles, or a genuinely slow ` +
-                `call. Raise CDP_TIMEOUT_MS if the work really takes this long.`,
+                `call. Raise CDP_TIMEOUT_MS if the work really takes this long.` +
+                // Which card was being driven, so the failure is actionable
+                // without going and re-running the whole suite to find out.
+                (describe ? `\n  in flight: ${describe}` : '') +
+                (this.navigations.at(-1) ? `\n  last navigation: ${this.navigations.at(-1).url}` : ''),
               sessionId,
             }),
           )
@@ -379,6 +697,9 @@ export class Cdp {
 
   close() {
     this.closed = true
+    // Before the socket, or the watchdog watches a connection nobody is using
+    // and eventually declares a finished run wedged.
+    this.watchdog?.disarm()
     this.abandonOutstanding(undefined, 'closed', 'the client was closed while the command was in flight', true)
     try { this.ws.close() } catch { /* already gone */ }
   }
@@ -495,3 +816,143 @@ export async function newPage(cdp, url = 'about:blank') {
 }
 
 export { sleep }
+
+/* ---------------------------------------------------------------------------
+ * Negative control — `node scripts/lib/cdp.mjs`
+ *
+ * BOARD.md: "a gate that can't fail is worthless; run the negative control
+ * before believing a pass." Everything below drives a **real** headless Chrome
+ * into a **real** hang and asserts the run comes back. Nothing is stubbed,
+ * because the bug being guarded against was precisely a clock that looked
+ * present and did not bound the thing that actually hung.
+ *
+ * Three claims, tested separately because they fail separately:
+ *
+ *   1. `deadline` — a `Runtime.evaluate` Chrome will never answer is rejected,
+ *      and the error names the method, the elapsed time and the card.
+ *      (`stallMs: 0` here, so the watchdog cannot take the credit.)
+ *   2. `stall` — a wedge with **nothing in flight**, which is the one no clock
+ *      in this file used to cover: every CDP command has settled and the run is
+ *      parked on a promise that will never resolve. This is the reproduction of
+ *      the 14-minute hang.
+ *   3. `overdue` — a command sent with the documented `{ timeout: 0 }` escape
+ *      hatch, i.e. with the clock in `send` switched off on purpose. This is
+ *      the watchdog's other branch (something IS in flight) and it is what
+ *      makes `timeout: 0` no longer a way to reintroduce the original bug.
+ *   4. no leak — after (2), the Chrome it launched and the stand-in dev server
+ *      beside it are both gone. A timeout that orphans the processes it was
+ *      meant to clean up has only moved the mess.
+ * ------------------------------------------------------------------------ */
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  const { spawnSync } = await import('node:child_process')
+  const { freePort } = await import('./port.mjs')
+  const mode = process.env.CDP_NEG_MODE
+
+  /** A card name, planted where a real check would put it. */
+  const NEVER_SETTLES = `(async () => {
+    const card = '09-contenteditable.vue'
+    await new Promise(() => {})
+    return card
+  })()`
+
+  if (mode === 'deadline') {
+    const chrome = await launchChrome({ port: await freePort() })
+    const cdp = await Cdp.connect(chrome.wsUrl, { timeoutMs: 3_000, stallMs: 0 })
+    const page = await newPage(cdp)
+    const t0 = Date.now()
+    try {
+      await page.evaluate(NEVER_SETTLES)
+      console.log('NO-DEADLINE — it resolved, which should be impossible')
+    } catch (err) {
+      console.log(`DEADLINE after ${Date.now() - t0}ms\n${err.message}`)
+    }
+    cdp.close()
+    process.exit(0)
+  } else if (mode === 'stall') {
+    const chrome = await launchChrome({ port: await freePort() })
+    const cdp = await Cdp.connect(chrome.wsUrl)
+    const page = await newPage(cdp)
+    // One command that *does* settle, so the diagnostic has a card to name.
+    await page.evaluate(`(async () => { const card = '09-contenteditable.vue'; return card })()`)
+    // Stand-in for the Vite server `interactions.mjs` spawns and this module
+    // has no handle on. It has to die with the run all the same.
+    const server = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], { stdio: 'ignore' })
+    console.log(`CHROME_PID=${chrome.proc.pid} SERVER_PID=${server.pid}`)
+    await new Promise(() => {}) // the hang — outside send(), exactly as observed
+  } else if (mode === 'overdue') {
+    const chrome = await launchChrome({ port: await freePort() })
+    const cdp = await Cdp.connect(chrome.wsUrl)
+    const { sessionId } = await newPage(cdp)
+    // `{ timeout: 0 }` is documented as "disables the deadline", and before the
+    // watchdog that made it a documented way back into the PG-21 hang.
+    await cdp.send(
+      'Runtime.evaluate',
+      { expression: NEVER_SETTLES, awaitPromise: true, returnByValue: true },
+      sessionId,
+      { timeout: 0 },
+    )
+    console.log('NO-WATCHDOG — the unbounded command returned, which should be impossible')
+    process.exit(0)
+  } else {
+    const run = (m, env) =>
+      spawnSync(process.execPath, [process.argv[1]], {
+        encoding: 'utf8',
+        timeout: 90_000,
+        env: { ...process.env, CDP_NEG_MODE: m, ...env },
+      })
+    const alive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
+    const fails = []
+
+    console.log('1. per-command deadline — Chrome is alive and will never answer\n')
+    const d = run('deadline')
+    process.stdout.write(`${(d.stdout ?? '').trim()}\n${(d.stderr ?? '').trim()}\n`)
+    for (const [what, ok] of [
+      ['rejected rather than hung', /DEADLINE after \d+ms/.test(d.stdout ?? '')],
+      ['names the method', /CDP Runtime\.evaluate timed out/.test(d.stdout ?? '')],
+      ['names the elapsed time', /timed out after \d+ms/.test(d.stdout ?? '')],
+      ['names the card in flight', /09-contenteditable\.vue/.test(d.stdout ?? '')],
+    ]) {
+      console.log(`   ${ok ? 'ok  ' : 'FAIL'} ${what}`)
+      if (!ok) fails.push(what)
+    }
+
+    console.log('\n2. stall watchdog — nothing in flight, the run is parked forever\n')
+    const t0 = Date.now()
+    const w = run('stall', { CDP_STALL_MS: '3000' })
+    const took = Date.now() - t0
+    const pids = /CHROME_PID=(\d+) SERVER_PID=(\d+)/.exec(w.stdout ?? '')
+    process.stdout.write(`${(w.stderr ?? '').trim()}\n`)
+    const leaked = pids ? [Number(pids[1]), Number(pids[2])].filter(alive) : ['(no pids reported)']
+    for (const [what, ok] of [
+      [`gave up (whole child run took ${took}ms, not forever)`, w.status !== null],
+      [`exited ${EXIT_WEDGED} = no verdict`, w.status === EXIT_WEDGED],
+      ['said CDP STALL', /CDP STALL/.test(w.stderr ?? '')],
+      ['named what it was last doing', /09-contenteditable\.vue/.test(w.stderr ?? '')],
+      ['left no orphan Chrome or dev server', leaked.length === 0],
+    ]) {
+      console.log(`   ${ok ? 'ok  ' : 'FAIL'} ${what}`)
+      if (!ok) fails.push(what)
+    }
+    for (const pid of leaked) { try { process.kill(pid, 'SIGKILL') } catch { /* gone */ } }
+
+    console.log('\n3. stall watchdog — a command sent with the deadline disabled ({ timeout: 0 })\n')
+    const o = run('overdue', { CDP_STALL_MS: '3000' })
+    process.stdout.write(`${(o.stderr ?? '').trim()}\n`)
+    for (const [what, ok] of [
+      [`exited ${EXIT_WEDGED} rather than hanging`, o.status === EXIT_WEDGED],
+      ['reported it as the in-flight branch', /outlived their own deadline/.test(o.stderr ?? '')],
+      ['flagged the missing deadline', /NO deadline \(timeout: 0\)/.test(o.stderr ?? '')],
+      ['named the card in flight', /09-contenteditable\.vue/.test(o.stderr ?? '')],
+    ]) {
+      console.log(`   ${ok ? 'ok  ' : 'FAIL'} ${what}`)
+      if (!ok) fails.push(what)
+    }
+
+    console.log(
+      fails.length
+        ? `\nFAIL — ${fails.length} claim(s) unproven: ${fails.join('; ')}`
+        : '\nPASS — every wait in this file is bounded, and a wedge is reported and cleaned up.',
+    )
+    process.exit(fails.length ? 1 : 0)
+  }
+}
