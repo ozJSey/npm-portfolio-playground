@@ -169,10 +169,10 @@ export default defineConfig({
       // Exact match only — a string alias would also rewrite `vue/compiler-sfc`.
       { find: /^vue$/, replacement: pkg('./node_modules/vue/dist/vue.runtime.esm-bundler.js') },
       { find: '@', replacement: pkg('./src') },
-      // @ozjsey/bigdecimal-string@1.1.0 was published without an `import`
-      // condition; point Vite at its published ESM file until the next patch.
+      // @ozjsey/bigdecimal-string publishes its ESM entry as `index.min.mjs`;
+      // point Vite at it because the package's default entry is CommonJS.
       ...(process.env.GITHUB_ACTIONS
-        ? [{ find: /^@ozjsey\/bigdecimal-string$/, replacement: pkg('./node_modules/@ozjsey/bigdecimal-string/dist/index.min.js') }]
+        ? [{ find: /^@ozjsey\/bigdecimal-string$/, replacement: pkg('./node_modules/@ozjsey/bigdecimal-string/dist/index.min.mjs') }]
         : []),
       ...LIBRARY_ALIASES,
     ],
