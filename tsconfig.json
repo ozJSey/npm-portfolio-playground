@@ -17,6 +17,14 @@
       "@/*": ["src/*"],
       "vue": ["./node_modules/vue"],
       "vue/*": ["./node_modules/vue/*"],
+      // The app aliases every local package to its SOURCE entry (vite.config.ts
+      // LIBRARIES). Without the same mapping here, `pnpm typecheck` reads the
+      // last-published .d.ts out of node_modules instead — so a card exercising
+      // an API that is not on npm yet fails to compile while the page it renders
+      // works perfectly. Add a line here when a tab starts using a new export.
+      "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
+      "@ozjsey/v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
+      "@ozjsey/v-teleport-to": ["../v-teleport-to/vTeleportTo.ts"],
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts", "scripts/**/*.mjs"]

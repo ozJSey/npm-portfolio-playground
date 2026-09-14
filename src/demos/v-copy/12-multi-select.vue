@@ -31,8 +31,11 @@ function toggleAll() {
 }
 
 // The copied context: a TSV block with a header row, ready to paste into a
-// spreadsheet, an email, or a chat message. Computed, so the binding always
-// reflects the current selection at copy time.
+// spreadsheet, an email, or a chat message. A string source is the value from
+// the LAST RENDER — that is all a template expression can be — and it is live
+// here because ticking a box re-renders. When the source depends on something
+// the render does not track, pass the getter form instead:
+// `v-copy="{ source: () => build() }"` is called at the moment of the copy.
 const payload = computed(() => {
   const picked = rows.filter((r) => selected.value.includes(r.id))
   return ['name\temail\tteam', ...picked.map((r) => `${r.name}\t${r.email}\t${r.team}`)].join('\n')
@@ -86,8 +89,8 @@ const payload = computed(() => {
 
   <p class="pg-muted">
     v-copy has no multi-select primitive — it does not need one. The selection is ordinary app
-    state; the aggregated block is a <code>computed</code> passed as the binding, read fresh at copy
-    time. Swap the join for <code>JSON.stringify</code> or a markdown table and the same three lines
+    state; the aggregated block is a <code>computed</code> passed as the binding, re-read on every
+    render the selection causes. Swap the join for <code>JSON.stringify</code> or a markdown table and the same three lines
     become “copy as JSON” / “copy as markdown”.
   </p>
 </template>

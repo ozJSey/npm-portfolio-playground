@@ -44,8 +44,12 @@ function fire() {
     </div>
 
     <p class="pg-muted">
-      Nothing throws, the page does not move, and no console error appears — a bad feature flag or
-      runtime config cannot take down the render cycle.
+      Nothing throws and the page does not move — a bad feature flag or runtime config cannot take
+      down the render cycle. Since 1.3.0 it is not <em>silent</em> either: open the console and each
+      broken <code>container</code> has said so once, in a sentence you can search for. Silence was
+      the actual complaint — <code>container</code> deliberately refuses to fall back to native
+      <code>scrollIntoView</code>, so a typo in a selector produced a scroll that never happened and
+      nothing to grep for. The warnings are latched per message, so a thousand rows warn once.
     </p>
   </div>
 </template>

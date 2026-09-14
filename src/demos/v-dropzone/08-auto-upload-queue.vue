@@ -30,6 +30,7 @@ const options = computed(() => ({
       <span class="name">{{ f.name }}</span>
       <span class="pg-muted">{{ (f.size / 1024).toFixed(1) }} KB</span>
       <button class="pg-btn" @click="dz?.upload(f)">upload just this one</button>
+      <button class="pg-btn remove" @click="dz?.cancel(f)">remove</button>
     </li>
   </ul>
 
@@ -45,6 +46,14 @@ const options = computed(() => ({
     <code>autoUpload: false</code> flips drop / paste / pick into queue-only mode. The no-arg
     <code>upload()</code> flushes the queue; <code>upload(file)</code> routes specific files through
     validation and the pipeline — which is how "upload only the ones I ticked" is built.
+  </p>
+
+  <p class="pg-muted">
+    <strong>remove</strong> is <code>api.cancel(file)</code>. On a queued file there is no request
+    to abort, so it simply drops out of <code>api.pending</code> and the zone's state does not move
+    — a review queue needs a remove, and until 0.1.1 this call was a silent no-op on anything that
+    had not started uploading. The no-arg <code>cancel()</code> is the other half: it aborts what is
+    in flight and leaves the queue alone.
   </p>
 
   <p class="pg-muted">
@@ -106,5 +115,8 @@ const options = computed(() => ({
 .name {
   font-family: var(--mono);
   min-width: 12rem;
+}
+.remove {
+  color: #b91c1c;
 }
 </style>

@@ -194,7 +194,12 @@ const CHECKS = [
     fn: async () => {
       const token = __st.stage('04-click-to-select.vue').querySelectorAll('code.token')[3]
       await __st.press(token)
-      return { pass: __st.sel() === '@ozjsey/v-select-text', detail: `"${__st.sel()}"` }
+      // The card's own caption names the needle: `/v-[a-z-]+$/`. `/` is not in
+      // the class, so the scope is dropped and `v-select-text` is the match —
+      // which is the point of the card, that `match` narrows the click to LESS
+      // than the token. The scoped rename moved the expectation here to
+      // '@ozjsey/v-select-text' without touching the regex it is measuring.
+      return { pass: __st.sel() === 'v-select-text', detail: `"${__st.sel()}"` }
     },
   },
   {
@@ -640,8 +645,11 @@ const NATIVE_CHECKS = [
       await trustedClick(ctx, `${CARD14}.querySelectorAll('code.token')[2]`)
       const sel = await ctx.page.evaluate(`(window.getSelection()?.toString() ?? '')`)
       const clip = await readClipboard(ctx)
+      // Same needle as card 04, same reason: `/v-[a-z-]+$/` cannot cross the
+      // `/` in `@ozjsey/`, so what is copied is `v-select-text` — narrower than
+      // both the token and the scoped package name. See the card's caption.
       return {
-        pass: clip === '@ozjsey/v-select-text' && sel === '@ozjsey/v-select-text',
+        pass: clip === 'v-select-text' && sel === 'v-select-text',
         detail: `clipboard=${JSON.stringify(clip)} selection=${JSON.stringify(sel)}`,
       }
     },
@@ -815,7 +823,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: '@ozjsey/v-select-text',
+  library: 'v-select-text',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

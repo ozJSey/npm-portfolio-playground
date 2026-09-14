@@ -1,12 +1,53 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
-import { libraries, demoCount, orphanedDemoFiles, missingDemoFiles } from './registry'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
+import {
+  libraries,
+  demoCount,
+  orphanedDemoFiles,
+  missingDemoFiles,
+  manifestProblems,
+} from './registry'
+import type { Demo } from './registry'
+import { cardHref, matchesCard, parseHash } from './card-link'
+import { libraryFailures } from './libraries'
 import { clearAllEdits, editedDemoIds } from './storage'
 import DemoCard from './components/DemoCard.vue'
+import Documentation from './components/Documentation.vue'
 
 const activeId = ref(libraries[0]?.id ?? '')
+/**
+ * Every project has two views (`tickets/DOCS-1`): the cards, and the package's
+ * own README rendered.
+ *
+ * The URL shape is fixed by `tickets/_STANDARDS.md` — `#<library-id>` is the
+ * playground, and published READMEs already link to it, so that form must keep
+ * meaning what it means. Documentation is `#<library-id>/docs`, which leaves
+ * `#<library-id>/<file>.vue` free for the per-card deep link DOCS-1 still owes.
+ */
+const view = ref<'playground' | 'docs'>('playground')
 const dirtyIds = ref(new Set(editedDemoIds()))
 const filter = ref('')
+
+/**
+ * DOCS-4 — the third meaning of `sub`, and the one that ships.
+ *
+ * `#<library-id>/<card>` selects a tab *and* points at one card. Published
+ * READMEs use it to link a paragraph to the card that demonstrates it, so these
+ * strings live inside tarballs on other people's disks; `src/card-link.ts`
+ * explains why the segment is a slug and what that commits us to.
+ *
+ * Two pieces of state, because a link can be right or stale and both have to be
+ * visible:
+ *   - `deepLinkedFile` is the card that was asked for and found. It is marked
+ *     on screen and scrolled to, and the rest of the tab is left exactly where
+ *     it was — someone arriving from a README usually wants the neighbours too.
+ *   - `unknownCard` is a segment that matched nothing. It degrades to the tab
+ *     and says so, because a stale link in a published README cannot be fixed
+ *     for the reader who already has it; a blank page would be the one outcome
+ *     worse than the link not existing.
+ */
+const deepLinkedFile = ref('')
+const unknownCard = ref('')
 
 const target = __PLAYGROUND_TARGET__
 // ?editors=open mounts every card with its editor visible — used by the smoke
@@ -14,6 +55,20 @@ const target = __PLAYGROUND_TARGET__
 const editorsOpen = new URLSearchParams(location.search).get('editors') === 'open'
 
 const active = computed(() => libraries.find((l) => l.id === activeId.value) ?? libraries[0])
+
+/**
+ * PG-22. A library whose `import()` failed, or whose build exported something
+ * Vue cannot register, is scoped to its own tab instead of blanking the app —
+ * but it is scoped *loudly*: a summary on every tab so it cannot be missed by
+ * clicking elsewhere, and an error card in place of this tab's demos, because
+ * every one of them would otherwise fail for the same reason, forty lines from
+ * the cause.
+ *
+ * `manifest.pkg` is the npm specifier; `libraries.ts` keys failures by the same
+ * string, which is why the id/pkg split in `registry.ts` matters here.
+ */
+const failedLibraries = libraryFailures
+const activeFailure = computed(() => failedLibraries.find((f) => f.specifier === active.value.pkg))
 
 const visibleDemos = computed(() => {
   const q = filter.value.trim().toLowerCase()
@@ -37,13 +92,88 @@ function onDirty(demoId: string, dirty: boolean) {
 function select(id: string) {
   activeId.value = id
   filter.value = ''
+  view.value = 'playground'
+  clearDeepLink()
   location.hash = id
   window.scrollTo({ top: 0 })
 }
 
+function showView(next: 'playground' | 'docs') {
+  view.value = next
+  clearDeepLink()
+  location.hash = next === 'docs' ? `${activeId.value}/docs` : activeId.value
+  window.scrollTo({ top: 0 })
+}
+
+function clearDeepLink() {
+  deepLinkedFile.value = ''
+  unknownCard.value = ''
+}
+
+/** Follow a card link from the sidebar — same URL a README would carry. */
+function openCard(demo: Demo) {
+  const href = cardHref(activeId.value, demo.file)
+  if (location.hash === href) resolveCard(demo.file)
+  else location.hash = href
+}
+
 function syncFromHash() {
-  const id = location.hash.replace(/^#/, '')
-  if (id && libraries.some((l) => l.id === id)) activeId.value = id
+  const { id, sub } = parseHash(location.hash)
+  const library = libraries.find((l) => l.id === id)
+  if (!library) return
+  activeId.value = library.id
+  view.value = sub === 'docs' ? 'docs' : 'playground'
+  clearDeepLink()
+  if (!sub || sub === 'docs') return
+
+  const demo = library.demos.find((d) => matchesCard(d.file, sub))
+  if (!demo) {
+    unknownCard.value = sub
+    return
+  }
+  // A filter left over from an earlier visit would hide the card the link asked
+  // for, and "the link is broken" is what that looks like from outside.
+  filter.value = ''
+  resolveCard(demo.file)
+}
+
+function resolveCard(file: string) {
+  deepLinkedFile.value = file
+  void nextTick(() => anchorTo(file))
+}
+
+/**
+ * Bring the deep-linked card into view, and keep it there while the page
+ * settles.
+ *
+ * A single `scrollIntoView()` is not enough here and the reason is specific to
+ * this app: every card compiles its SFC asynchronously, so the cards *above*
+ * the target keep changing height for a second or so after the hash resolves.
+ * Anchoring once lands you near the card and then drifts away from it — which
+ * reads as a deep link that does not work.
+ *
+ * So: re-anchor every frame until the document height has been still for ten
+ * consecutive frames, bounded by a deadline so a card that never stops
+ * animating cannot hold the scroll position hostage. `scroll-margin-top` on
+ * `.demo` keeps it clear of the sticky header.
+ */
+let anchorFrame = 0
+function anchorTo(file: string) {
+  cancelAnimationFrame(anchorFrame)
+  const deadline = performance.now() + 2000
+  let lastHeight = -1
+  let stableFrames = 0
+  const step = () => {
+    // A newer link, a tab click or the docs view took over: stop pulling.
+    if (deepLinkedFile.value !== file || view.value !== 'playground') return
+    document.getElementById(`demo-${file}`)?.scrollIntoView({ block: 'start' })
+    const height = document.documentElement.scrollHeight
+    stableFrames = height === lastHeight ? stableFrames + 1 : 0
+    lastHeight = height
+    if (stableFrames >= 10 || performance.now() > deadline) return
+    anchorFrame = requestAnimationFrame(step)
+  }
+  anchorFrame = requestAnimationFrame(step)
 }
 
 function resetAll() {
@@ -56,7 +186,10 @@ onMounted(() => {
   syncFromHash()
   window.addEventListener('hashchange', syncFromHash)
 })
-onBeforeUnmount(() => window.removeEventListener('hashchange', syncFromHash))
+onBeforeUnmount(() => {
+  cancelAnimationFrame(anchorFrame)
+  window.removeEventListener('hashchange', syncFromHash)
+})
 </script>
 
 <template>
@@ -95,40 +228,136 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncFromHash))
 
   <main class="layout">
     <div>
+      <!--
+        PG-22. Rendered on every tab, with a stable class and a `data-package`
+        per line, so `scripts/smoke.mjs` finds it in a `--dump-dom` snapshot of
+        any URL and can name the package rather than reporting "No library tabs
+        rendered".
+      -->
+      <section v-if="failedLibraries.length" class="pg-library-failures">
+        <h2>
+          {{ failedLibraries.length }} librar{{ failedLibraries.length === 1 ? 'y' : 'ies' }} failed to
+          load ({{ target === 'dist' ? 'dist builds' : 'sources' }})
+        </h2>
+        <p
+          v-for="failure in failedLibraries"
+          :key="failure.specifier"
+          class="pg-library-failure"
+          :data-package="failure.specifier"
+        >
+          <strong>{{ failure.specifier }}</strong> — {{ failure.message }}
+        </p>
+        <p class="pg-library-failures__hint">
+          Every other tab still works. To verify yours around a broken sibling, restart the dev server
+          with <code>PLAYGROUND_UNALIAS={{ failedLibraries.map((f) => f.dir).join(',') }}</code> —
+          that package then resolves from <code>node_modules</code> instead of its source.
+        </p>
+      </section>
+
+      <!--
+        DOCS-4. A card link that resolves to nothing lands here rather than on a
+        blank page. Above the library header, not down with the cards, because
+        the reader following it is holding a README they cannot edit: the first
+        thing they need is to be told the link is stale, and the second is the
+        list of ids this tab does answer to so they can find the card by hand.
+        A tab's `notes` can run to a dozen lines, and a notice underneath them
+        is a notice nobody sees.
+      -->
+      <p
+        v-if="unknownCard"
+        class="demo__banner demo__banner--warn pg-unknown-card"
+        :data-unknown-card="unknownCard"
+      >
+        No card “{{ unknownCard }}” on #{{ active.id }} — showing the whole tab instead. The link
+        that brought you here is out of date. This tab has:
+        {{ active.demos.map((d) => d.slug).join(', ') }}
+      </p>
+
       <div class="lib-head">
-        <h2>{{ active.id }}</h2>
+        <h2>{{ active.id }} <span class="lib-head__pkg">{{ active.pkg }}</span></h2>
         <p>{{ active.tagline }}</p>
         <span class="lib-head__status">{{ active.status }}</span>
-        <ul v-if="active.notes?.length" class="lib-head__notes">
+        <div class="lib-head__views" role="tablist" aria-label="View">
+          <button
+            class="lib-head__view"
+            role="tab"
+            :aria-selected="view === 'playground'"
+            @click="showView('playground')"
+          >
+            Playground <span class="lib-head__viewcount">{{ active.demos.length }}</span>
+          </button>
+          <button
+            class="lib-head__view"
+            role="tab"
+            :aria-selected="view === 'docs'"
+            @click="showView('docs')"
+          >
+            Documentation
+          </button>
+        </div>
+        <ul v-if="view === 'playground' && active.notes?.length" class="lib-head__notes">
           <li v-for="note in active.notes" :key="note">{{ note }}</li>
         </ul>
       </div>
 
-      <p v-if="orphanedDemoFiles.length" class="demo__banner demo__banner--warn">
-        Not listed in any manifest (so not rendered): {{ orphanedDemoFiles.join(', ') }}
-      </p>
-      <p v-if="missingDemoFiles.length" class="demo__banner demo__banner--warn">
-        Listed in a manifest but missing on disk: {{ missingDemoFiles.join(', ') }}
-      </p>
+      <Documentation v-if="view === 'docs'" :library="active" />
+      <template v-else>
 
-      <DemoCard
-        v-for="demo in visibleDemos"
-        :key="demo.id"
-        :demo="demo"
-        :initial-editor-open="editorsOpen"
-        @dirty="onDirty"
-      />
+        <p v-if="manifestProblems.length" class="demo__banner demo__banner--error">
+          {{ manifestProblems.join(' ') }}
+        </p>
+        <p v-if="orphanedDemoFiles.length" class="demo__banner demo__banner--warn">
+          Not listed in any manifest (so not rendered): {{ orphanedDemoFiles.join(', ') }}
+        </p>
+        <p v-if="missingDemoFiles.length" class="demo__banner demo__banner--warn">
+          Listed in a manifest but missing on disk: {{ missingDemoFiles.join(', ') }}
+        </p>
 
-      <p v-if="!visibleDemos.length" class="pg-muted">No demo in this tab matches “{{ filter }}”.</p>
+        <section v-if="activeFailure" class="demo pg-library-failure-card">
+          <h3>{{ active.demos.length }} demos on this tab cannot run</h3>
+          <p class="demo__banner demo__banner--error">
+            {{ activeFailure.specifier }} failed to load — {{ activeFailure.message }}
+          </p>
+          <p class="pg-muted">
+            The cards are not rendered because every one of them binds
+            <code>v-{{ active.id.replace(/^v-/, '') }}</code>, and mounting them would bury this
+            message under a screenful of resolve failures. Fix <code>{{ activeFailure.dir }}/</code>,
+            or re-run with <code>PLAYGROUND_UNALIAS={{ activeFailure.dir }}</code>.
+          </p>
+        </section>
+
+        <template v-else>
+          <DemoCard
+            v-for="demo in visibleDemos"
+            :key="demo.id"
+            :demo="demo"
+            :library-id="active.id"
+            :deep-linked="demo.file === deepLinkedFile"
+            :initial-editor-open="editorsOpen"
+            @dirty="onDirty"
+          />
+
+          <p v-if="!visibleDemos.length" class="pg-muted">
+            No demo in this tab matches “{{ filter }}”.
+          </p>
+        </template>
+      </template>
     </div>
 
-    <aside class="toc">
+    <aside v-if="view === 'playground'" class="toc">
       <p class="toc__title">{{ active.id }} demos</p>
+      <!--
+        The sidebar writes the canonical deep link (DOCS-4), so the URL in the
+        address bar after a click is the one to paste into a README — and the
+        router's scroll path is exercised every time anyone uses this list,
+        rather than only by the links nobody clicks in-house.
+      -->
       <a
         v-for="demo in active.demos"
         :key="demo.id"
-        :href="`#demo-${demo.file}`"
-        :class="{ 'is-dirty': dirtyIds.has(demo.id) }"
+        :href="cardHref(active.id, demo.file)"
+        :class="{ 'is-dirty': dirtyIds.has(demo.id), 'is-current': demo.file === deepLinkedFile }"
+        @click.prevent="openCard(demo)"
         >{{ demo.title }}</a
       >
     </aside>

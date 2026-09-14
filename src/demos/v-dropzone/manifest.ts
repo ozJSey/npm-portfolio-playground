@@ -1,10 +1,11 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-dropzone',
+  id: 'v-dropzone',
+  pkg: '@ozjsey/v-dropzone',
   tagline:
     'The whole drag-drop pipeline in one binding: drop / paste / click-to-pick → validate → upload → state. No wrapper components, no enter/leave counter to write, no XHR plumbing.',
-  status: 'v0.1.0 local — 330/330 tests, publish prep',
+  status: '@ozjsey/v-dropzone 0.1.1 — 345/345 tests, 66 browser checks',
   notes: [
     'The playground dev server exposes three endpoints for the upload demos: POST /api/upload (200 after ~700ms), /api/upload-slow (200 after ~4s, long enough to cancel), /api/upload-fail (500 after ~400ms).',
     'Progress events need a body big enough to stream — drop a few MB to watch the bar move rather than jump.',

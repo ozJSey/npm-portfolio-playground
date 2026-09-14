@@ -158,6 +158,16 @@ kbd {
   margin-bottom: 1.25rem;
 }
 
+.lib-head__pkg {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  vertical-align: middle;
+}
+
 .lib-head h2 {
   margin: 0;
   font-family: var(--mono);
@@ -321,6 +331,62 @@ kbd {
   color: var(--warn);
   font-size: 0.72rem;
   align-self: center;
+}
+
+/* ── Card deep links (DOCS-4) ──────────────────────────────────────────── */
+
+/*
+ * The card a `#<library-id>/<card>` link asked for. Marked, not isolated: the
+ * neighbours stay exactly where they were, so the reader who followed a README
+ * paragraph still gets the surrounding examples. An outline and an accent rail
+ * rather than a background change, because the card's own stage is white and
+ * tinting round it is how "this one" turns into "this one is broken".
+ */
+.demo.is-deep-linked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.demo.is-deep-linked > .demo__head {
+  border-left: 3px solid var(--accent);
+}
+
+.demo__linked {
+  color: var(--accent);
+  font-size: 0.72rem;
+  align-self: center;
+  border: 1px solid var(--accent-dim);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+}
+
+/*
+ * The stale-link notice. It sits outside a card, so it needs the rounded box
+ * `.demo__banner` normally borrows from its parent.
+ */
+.pg-unknown-card {
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+/* Copy-the-URL affordance; visible enough to find, quiet enough to ignore. */
+.demo__permalink {
+  color: var(--border-strong);
+  text-decoration: none;
+  font-family: var(--mono);
+  margin-right: 0.35rem;
+}
+
+.demo__permalink:hover,
+.demo.is-deep-linked .demo__permalink {
+  color: var(--accent);
+}
+
+.toc a.is-current {
+  color: var(--text);
+  border-left-color: var(--accent);
+  background: var(--bg-inset);
 }
 
 .demo__stage {
@@ -502,4 +568,340 @@ kbd {
   font-size: 0.85rem;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+
+/* ── `.pg-vs__*` — the with-and-without comparison ──────────────────────────
+ *
+ * Every card on the `bigdecimal-string` tab is the same shape: one expression,
+ * evaluated twice, plain JavaScript on the left and the library on the right.
+ * The whole value proposition is the gap between the two columns — `"0.30"`
+ * says nothing on its own — so the layout is shared rather than re-invented
+ * per card, and the markup is a contract the interaction spec reads back:
+ *
+ *   <div class="pg-vs" data-claim="add">
+ *     <code class="pg-vs__expr">0.1 + 0.2</code>
+ *     <div class="pg-vs__cols">
+ *       <div class="pg-vs__col pg-vs__col--native">
+ *         <span class="pg-vs__head">plain JavaScript</span>
+ *         <output class="pg-vs__out" data-role="native">…</output>
+ *       </div>
+ *       <div class="pg-vs__col pg-vs__col--lib">
+ *         <span class="pg-vs__head">bigdecimal-string</span>
+ *         <output class="pg-vs__out" data-role="bigdecimal">…</output>
+ *       </div>
+ *     </div>
+ *   </div>
+ *
+ * BOTH outputs are computed in the page. A printed literal would be a claim
+ * about JavaScript rather than a demonstration of one, and it could rot without
+ * anybody noticing — which is exactly how this README came to assert that
+ * `(1e21).toLocaleString()` returns `"1e+21"`. It does not, on any engine with
+ * ICU. The live column says so.
+ *
+ * `overflow-wrap: anywhere` is load-bearing, not cosmetic: the values here run
+ * to 30+ characters, and a clipped answer demonstrates nothing. The interaction
+ * spec asserts `scrollWidth <= clientWidth` on every output for that reason.
+ */
+
+.pg-vs {
+  margin: 0 0 0.85rem;
+}
+
+.pg-vs__expr {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: #40485c;
+  margin-bottom: 0.3rem;
+}
+
+.pg-vs__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.pg-vs__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid var(--stage-border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  min-width: 0;
+}
+
+.pg-vs__col--native {
+  background: #fff5f5;
+  border-color: #f3c7c7;
+}
+
+.pg-vs__col--lib {
+  background: #f2fbf6;
+  border-color: #b6e3ca;
+}
+
+.pg-vs__head {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7488;
+}
+
+.pg-vs__col--native .pg-vs__head {
+  color: #a13b3b;
+}
+
+.pg-vs__col--lib .pg-vs__head {
+  color: #1f7a4d;
+}
+
+.pg-vs__out {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--stage-text);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.pg-vs__note {
+  font-size: 0.72rem;
+  color: #6b7488;
+}
+
+/* ── Documentation view ─────────────────────────────────────────────────────
+ *
+ * Every project has two views (tickets/DOCS-1): the cards, and the package's
+ * own README rendered by src/markdown.ts. Nothing below styles content that was
+ * authored here — the file on screen is the file npm shows.
+ */
+
+.lib-head__views {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-left: 0.6rem;
+  vertical-align: middle;
+}
+
+.lib-head__view {
+  appearance: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-family: var(--mono);
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.lib-head__view:hover {
+  color: var(--text);
+  background: var(--bg-raised);
+}
+
+.lib-head__view[aria-selected='true'] {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.lib-head__viewcount {
+  opacity: 0.7;
+  font-size: 0.72rem;
+}
+
+.docs__source {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+/* The rendered README. Dark like the rest of the chrome — this is a reading
+   view, not a demo stage, so it does not get the white `.demo__stage` ground. */
+.md {
+  max-width: 62rem;
+  line-height: 1.65;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.md-h {
+  line-height: 1.25;
+  margin: 1.8rem 0 0.7rem;
+  color: var(--text);
+}
+
+.md-h1 {
+  font-size: 1.6rem;
+  margin-top: 0;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-h2 {
+  font-size: 1.25rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-h3 {
+  font-size: 1.05rem;
+}
+
+.md-h4,
+.md-h5,
+.md-h6 {
+  font-size: 0.95rem;
+}
+
+.md-p {
+  margin: 0.7rem 0;
+  white-space: pre-line;
+}
+
+.md-a {
+  color: var(--accent);
+}
+
+.md-img {
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+.md .md-list {
+  margin: 0.6rem 0;
+  padding-left: 1.4rem;
+}
+
+.md .md-list li {
+  margin: 0.25rem 0;
+}
+
+.md code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.32rem;
+}
+
+.md-pre {
+  margin: 0.8rem 0;
+  padding: 0.8rem 0.9rem;
+  background: #0b0e15;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.md-pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #cfd6e6;
+  white-space: pre;
+}
+
+.md-pre[data-lang]::before {
+  content: attr(data-lang);
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 0.4rem;
+}
+
+.md-quote {
+  margin: 0.9rem 0;
+  padding: 0.1rem 0.9rem;
+  border-left: 3px solid var(--accent-dim);
+  background: var(--bg-raised);
+  border-radius: 0 8px 8px 0;
+}
+
+.md-hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1.6rem 0;
+}
+
+/* Wide tables scroll inside their own box rather than widening the page. */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0.9rem 0;
+}
+
+.md-table {
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table th {
+  background: var(--bg-inset);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+ * PG-22 — a library that did not load.
+ *
+ * Rendered on every tab, not just the broken one, because the failure is the
+ * most important thing on the page: with the old module-scope barrel this was a
+ * blank screen and a `smoke` line that named nothing. Styled like `.pg-fatal`
+ * on purpose — same red, same weight — since the only thing that changed is
+ * that the other nine tabs survive.
+ * -------------------------------------------------------------------------- */
+.pg-library-failures {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid #b91c1c;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.pg-library-failures h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.pg-library-failure {
+  margin: 0.25rem 0;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.pg-library-failures__hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.pg-library-failure-card {
+  padding: 1.25rem 1.5rem;
+}
+
+.pg-library-failure-card h3 {
+  margin: 0 0 0.75rem;
 }

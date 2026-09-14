@@ -47,8 +47,11 @@ function onDebounced(e: ResizeEvent) {
     ticks on the top box: {{ raw }} · debounced handler calls on the bottom box: {{ debounced }}
   </p>
   <p class="pg-muted">
-    Drag the bottom box in one continuous motion: the handler fires once at the trailing edge with
-    the final dimensions instead of on every frame.
+    <code>box</code> is passed to <code>observe()</code>, so it decides <em>when</em> a callback
+    fires as well as what the numbers mean — a border- or padding-only change is invisible to
+    <code>content</code>, and a devicePixelRatio change is invisible to both of the others.
+    Drag the bottom box in one continuous motion: <code>debounce</code> is trailing-edge, so the
+    handler fires once when you stop, with the final dimensions, and not at all while you drag.
   </p>
 </template>
 

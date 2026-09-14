@@ -29,9 +29,13 @@ function onUpdate(e: Event) {
   </div>
 
   <!-- The width-restricting container is an ANCESTOR, not the directive host.
-       Available width is min(host, container), so .padded-host's border, padding
-       and margin — and the "+N" badge beside the row — are all accounted for
-       without anyone having to guess at them. -->
+       Available width is min(host, container) — no subtraction — so .padded-host's
+       border, padding and margin and the "+N" badge beside the row are accounted
+       for by the host's own box being the narrower of the two, which it is here.
+       Naming an ancestor is what BOUNDS a host that can measure wider than the
+       space it is really given; a flex item like this one is already bounded, so
+       here the option is a declaration of intent rather than the thing doing the
+       work. -->
   <div ref="outer" class="outer" :style="{ width: `${width}px` }">
     <div class="padded-host">
       <div

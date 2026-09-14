@@ -28,8 +28,7 @@ const options = computed(() => ({
     </label>
   </div>
 
-  <ul class="grid" role="listbox" aria-label="Fruit" aria-orientation="horizontal"
-    v-keyboard-navigation="options">
+  <ul class="grid" role="listbox" aria-label="Fruit" v-keyboard-navigation="options">
     <li v-for="fruit in fruits" :key="fruit" role="option" class="cell" :aria-selected="false">
       {{ fruit }}
     </li>
@@ -48,14 +47,25 @@ const options = computed(() => ({
     nothing is never claimed either — it reaches your own shortcut handler. Typeahead is the first
     of the platform <code>focusgroup</code> attribute's permanent non-goals.
   </p>
+
+  <p class="pg-muted">
+    <strong>One column on purpose.</strong> This card used to lay the twelve options out in a
+    four-wide grid with <code>aria-orientation="horizontal"</code>, which made
+    <kbd>↑</kbd>/<kbd>↓</kbd> dead keys and sent <kbd>→</kbd> at the end of a visual row down-and-
+    left to the start of the next one. 2D grids are <em>not implemented</em> — the README says a
+    half-done grid is the worst outcome — so a card offered as something to copy must not be one.
+  </p>
 </template>
 
 <style scoped>
 .grid {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 240px;
+  max-height: 260px;
+  overflow-y: auto;
   margin: 0;
   padding: 0.35rem;
   list-style: none;

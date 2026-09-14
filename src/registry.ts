@@ -7,6 +7,7 @@
  *
  * Both globs are eager so a tab switch never waits on a network round-trip.
  */
+import { cardSlug } from './card-link'
 
 export interface DemoMeta {
   /** File name inside the library folder, e.g. `01-bare.vue`. */
@@ -27,8 +28,25 @@ export interface DemoMeta {
 }
 
 export interface LibraryManifest {
-  /** Package name — also the URL hash and the folder name. */
+  /**
+   * The folder name under `src/demos/` — and therefore the URL hash, the tab
+   * label, and the name of the interactions spec that drives this tab.
+   *
+   * It is deliberately NOT the npm specifier. `tickets/_STANDARDS.md` fixes the
+   * canonical README link as
+   * `https://ozjsey.github.io/npm-portfolio-playground/#<library-id>`, and every
+   * published README already points at a bare folder name. Putting `@ozjsey/…`
+   * here once broke three things at once, silently: `orphanedDemoFiles` matched
+   * nothing so every card on the page was reported as unlisted, the hash stopped
+   * resolving, and `scripts/interactions.mjs` refused to start. `pkg` is where
+   * the npm name goes.
+   */
   id: string
+  /**
+   * The npm specifier a demo `import`s — `@ozjsey/v-copy`. Shown in the tab
+   * header, and the prefix `src/libraries.ts` and `vite.config.ts` key on.
+   */
+  pkg: string
   /** One-sentence description of the restriction the library removes. */
   tagline: string
   /** Publish state, mirrored from the root TASKS.md snapshot. */
@@ -41,6 +59,11 @@ export interface LibraryManifest {
 export interface Demo extends DemoMeta {
   /** `<library id>/<file>` — stable identity for storage + style scoping. */
   id: string
+  /**
+   * The published deep-link segment — `02-placement-flip.vue` → `placement-flip`.
+   * See `card-link.ts` for why it is the slug and not the filename.
+   */
+  slug: string
   /** Raw `.vue` source as it exists on disk. */
   source: string
 }
@@ -62,16 +85,52 @@ const sources = import.meta.glob<string>('./demos/*/*.vue', {
 /** Manifest entries with no file on disk — surfaced in the UI, never fatal. */
 export const missingDemoFiles: string[] = []
 
+/**
+ * Manifests whose `id` is not their folder name. Rendered as an ERROR banner,
+ * not a warning, so `smoke` fails on it: an id that disagrees with the folder
+ * takes the hash, the orphan check and the interactions runner down with it,
+ * and all three failures are quiet.
+ */
+export const manifestProblems: string[] = []
+
 function buildLibrary(path: string, manifest: LibraryManifest): Library {
   const dir = path.slice(0, path.lastIndexOf('/'))
+  const folder = dir.slice(dir.lastIndexOf('/') + 1)
+  if (manifest.id !== folder) {
+    manifestProblems.push(
+      `src/demos/${folder}/manifest.ts declares id '${manifest.id}' — it must be '${folder}', ` +
+        `the folder name. The npm specifier belongs in \`pkg\`.`,
+    )
+  }
   const demos: Demo[] = []
+  /** slug → the file that claimed it, for the collision check below. */
+  const claimed = new Map<string, string>()
   for (const demo of manifest.demos) {
     const source = sources[`${dir}/${demo.file}`]
     if (source === undefined) {
       missingDemoFiles.push(`${manifest.id}/${demo.file}`)
       continue
     }
-    demos.push({ ...demo, id: `${manifest.id}/${demo.file}`, source })
+    const slug = cardSlug(demo.file)
+    /**
+     * DOCS-4. The slug is a published URL segment — it goes inside tarballs a
+     * reader cannot be asked to update. Two files that slug to the same thing
+     * (`02-flip.vue` and `12-flip.vue`) would make one of those URLs resolve to
+     * whichever card the manifest happened to list first, and nothing would say
+     * so. Reported as a *problem*, which renders as an error banner and fails
+     * `pnpm smoke`, for the same reason an id/folder mismatch is.
+     */
+    const other = claimed.get(slug)
+    if (other !== undefined) {
+      manifestProblems.push(
+        `src/demos/${folder}/${demo.file} and ${other} both deep-link as ` +
+          `#${manifest.id}/${slug}. The card slug is the filename without its ordering prefix ` +
+          `and extension (src/card-link.ts), it ships inside published READMEs, and it must be ` +
+          `unique within a tab — rename one of the two files.`,
+      )
+    }
+    claimed.set(slug, demo.file)
+    demos.push({ ...demo, id: `${manifest.id}/${demo.file}`, slug, source })
   }
   return { ...manifest, demos }
 }
@@ -87,3 +146,29 @@ export const orphanedDemoFiles = Object.keys(sources).filter((path) => {
   const [, , libId, file] = path.split('/')
   return !libraries.some((lib) => lib.id === libId && lib.demos.some((d) => d.file === file))
 })
+
+/**
+ * The deep-link index: every tab, and every card id a published README is
+ * allowed to point at.
+ *
+ * Published on `window.__PLAYGROUND_CARDS__` by `src/main.ts` so the harness
+ * reads the card list **out of the running app** instead of re-deriving it from
+ * the filenames. DOCS-4 links ship in tarballs, so "is this a real card?" has
+ * to be answered by the same code that resolves the hash — a second
+ * implementation in a `.mjs` script is exactly the drift that would let a
+ * README link pass the gate and 404 the reader.
+ */
+export interface CardIndexEntry {
+  /** The published segment — what goes after `#<library-id>/`. */
+  slug: string
+  /** The file on disk, still accepted as a segment for links written earlier. */
+  file: string
+  title: string
+}
+
+export const cardIndex: Record<string, CardIndexEntry[]> = Object.fromEntries(
+  libraries.map((lib) => [
+    lib.id,
+    lib.demos.map(({ slug, file, title }) => ({ slug, file, title })),
+  ]),
+)

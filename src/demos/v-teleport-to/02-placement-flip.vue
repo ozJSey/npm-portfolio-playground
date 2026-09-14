@@ -16,6 +16,12 @@ const open = ref(true)
 // fit ladder was unreachable: `neither` needs the reference near the middle of
 // the boundary, and the zero clamp needs it hard against one edge.
 const refY = ref(28)
+// The OTHER input to the fit test. `refY` varies the ROOM; this varies the
+// popover's own height, and a card that only moves the reference structurally
+// cannot catch a bug whose input is the content — which is exactly how TT-19
+// stayed open while this card was green. Extra rows are plain block children,
+// so the popover is as tall as its content and nothing else.
+const extraRows = ref(0)
 
 const stage = useTemplateRef<HTMLElement>('stage')
 const trigger = useTemplateRef<HTMLElement>('trigger')
@@ -25,16 +31,19 @@ const trigger = useTemplateRef<HTMLElement>('trigger')
 // happens to be scrolled, and — unlike a reference pinned in a page column —
 // horizontal space actually varies, so the horizontal flip is reachable.
 //
-// `maxHeight: 200` sits above the popover's natural ~177px, so the clamp does
-// not bind and the fit test measures the real box. The box is 360px tall and the
-// two sides share 326px of it, which is what makes every verdict — `fits`,
-// `flipped`, `neither`, and a zero clamp — reachable with the slider alone.
+// `maxHeight: 400` sits above everything the content slider can produce, so the
+// clamp never becomes the binding constraint and the fit test is always
+// deciding about the popover's real height. That matters now there are two
+// sliders: capped at 200 the content axis would stop moving the verdict the
+// moment the cap bit, and `neither` would be unreachable by content alone. The
+// box is 360px tall and the two sides share 326px of it, which is what makes
+// every verdict — `fits`, `flipped`, `neither`, and a zero clamp — reachable.
 const options = computed(() => ({
   to: trigger.value,
   boundary: stage.value ?? ('viewport' as const),
   placement: placement.value,
   flip: flip.value,
-  maxHeight: 200,
+  maxHeight: 400,
   widthMultiplier: 2,
 }))
 
@@ -45,6 +54,10 @@ const opposite = ref(0)
 const fit = ref('—')
 const maxHeight = ref(0)
 const collapsed = ref(false)
+// What the fit test actually compared against the two numbers above, and
+// whether the popover you are looking at is short or cut.
+const contentHeight = ref(0)
+const truncated = ref(false)
 // The buffered numbers — NOT the ones the fit test reads. They exist here only
 // to explain which side `'auto'` prefers, which is the one thing the buffers
 // still weight.
@@ -71,6 +84,8 @@ function onPositioned(e: Event) {
   fit.value = d.fit
   maxHeight.value = Math.round(d.maxHeight)
   collapsed.value = d.collapsed
+  contentHeight.value = d.contentHeight === null ? 0 : Math.round(d.contentHeight)
+  truncated.value = d.truncated
 
   const el = trigger.value
   const box = stage.value
@@ -101,6 +116,11 @@ function onPositioned(e: Event) {
       <input v-model.number="refY" type="range" min="0" max="100" />
       {{ refY }}%
     </label>
+    <label class="pg-label">
+      popover content
+      <input v-model.number="extraRows" type="range" min="0" max="10" />
+      +{{ extraRows }} rows
+    </label>
   </div>
 
   <div class="pg-row" style="margin-bottom: 0.7rem">
@@ -109,7 +129,9 @@ function onPositioned(e: Event) {
     <span class="pg-chip">{{ chosen }} has {{ available }}px</span>
     <span class="pg-chip">{{ losing }} has {{ opposite }}px</span>
     <span class="pg-chip">maxHeight {{ maxHeight }}px</span>
+    <span class="pg-chip">content {{ contentHeight }}px</span>
     <span v-if="collapsed" class="pg-chip is-collapsed">data-teleport-collapsed</span>
+    <span v-if="truncated" class="pg-chip is-cut">data-teleport-truncated</span>
   </div>
 
   <div v-if="!horizontal" class="pg-row" style="margin-bottom: 0.7rem">
@@ -137,6 +159,7 @@ function onPositioned(e: Event) {
     <span class="pg-muted">so its two sides share 326px</span>
     <span class="pg-muted">at 50% each side has 163px</span>
     <span class="pg-muted">so neither of them can hold it</span>
+    <span v-for="n in extraRows" :key="n" class="pg-muted">extra row {{ n }}</span>
   </div>
 
   <p class="pg-muted">
@@ -146,6 +169,16 @@ function onPositioned(e: Event) {
     and down the box and watch the chips — the popover moves before it would be cut, not after.
     Untick <code>flip</code> to pin the side instead: the popover stays put and is clamped into
     whatever room is left, which is what <em>every</em> binding did before 3.0.0.
+  </p>
+  <p class="pg-muted">
+    <strong>Both inputs to the fit test have a slider.</strong> The reference slider varies the
+    <em>room</em>; <code>popover content</code> varies the popover's own <em>height</em>. Hold the
+    reference still and drag the content instead: the geometry never moves and the placement still
+    changes, because what is being compared is the content's real size —
+    <code>detail.contentHeight</code>, measured with our own <code>max-height</code> lifted, on no
+    side, in the open state. Push the content past <code>maxHeight: 400</code> and
+    <code>data-teleport-truncated</code> appears: <code>fit</code> is still right (the host fits at
+    the size it renders) and the popover is still cut, which is why the two are separate signals.
   </p>
   <p class="pg-muted">
     Park the reference in the middle and neither side can hold the popover: there is no right
@@ -223,6 +256,11 @@ function onPositioned(e: Event) {
 }
 .is-soft {
   opacity: 0.7;
+}
+.is-cut {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }
 .popover {
   background: #1f2437;

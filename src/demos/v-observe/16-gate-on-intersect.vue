@@ -44,9 +44,11 @@ function onResize(e: ResizeEvent) {
   </div>
 
   <p class="pg-muted">
-    Gated handlers stay silent while the host is off-screen, and the resize baseline resets on
-    return (the next tick reports <code>from: null</code>) so you never get a bogus delta spanning
-    the invisible period. <code>mutate.on: 'removed'</code> is deliberately exempt — it is terminal,
+    Gated handlers stay silent while the host is off-screen, and on the way back the element is
+    re-observed, so the resize tick you were owed actually arrives with a fresh baseline
+    (<code>from: null</code>) rather than never — resize observations are delivered before
+    intersection ones, so the mandatory first callback always lands while the gate still says
+    hidden, and a real <code>ResizeObserver</code> will not re-send it on its own. <code>mutate.on: 'removed'</code> is deliberately exempt — it is terminal,
     so gating it could mean never hearing about it. If <code>IntersectionObserver</code> is missing
     entirely the gate becomes "always fire" rather than swallowing everything.
   </p>

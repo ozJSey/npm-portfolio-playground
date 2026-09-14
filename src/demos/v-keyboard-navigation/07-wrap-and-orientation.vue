@@ -1,23 +1,27 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { NO_ROLE_DEFAULTS, ROLE_DEFAULTS } from '@ozjsey/v-keyboard-navigation'
+import type { KeyboardNavigationRole } from '@ozjsey/v-keyboard-navigation'
 
-type Role = 'toolbar' | 'tablist' | 'menu' | 'menubar' | 'listbox' | 'radiogroup' | 'none'
+type Role = KeyboardNavigationRole | 'none'
 
 const role = ref<Role>('toolbar')
 const wrapOverride = ref<'default' | 'wrap' | 'nowrap'>('default')
 const rtl = ref(false)
 
-const DEFAULTS: Record<Role, { axis: string; wrap: string }> = {
-  toolbar: { axis: 'inline (horizontal)', wrap: 'clamp' },
-  tablist: { axis: 'inline (horizontal)', wrap: 'wrap' },
-  menubar: { axis: 'inline (horizontal)', wrap: 'wrap' },
-  menu: { axis: 'block (vertical)', wrap: 'wrap' },
-  listbox: { axis: 'block (vertical)', wrap: 'clamp' },
-  radiogroup: { axis: 'both', wrap: 'wrap' },
-  none: { axis: 'both', wrap: 'clamp' },
-}
+// Read out of the library, never retyped. A hand-maintained copy of this table
+// is two writers for one fact, in a file written to be copied — change a role
+// default in roles.ts and the card would go on displaying the old one.
+const AXIS_NAME = { inline: 'inline (horizontal)', block: 'block (vertical)', both: 'both' }
 
-const shown = computed(() => DEFAULTS[role.value])
+const defaults = computed(() =>
+  role.value === 'none' ? NO_ROLE_DEFAULTS : ROLE_DEFAULTS[role.value],
+)
+const shown = computed(() => ({
+  axis: AXIS_NAME[defaults.value.axis],
+  wrap: defaults.value.wrap ? 'wrap' : 'clamp',
+  skipDisabled: defaults.value.skipDisabled,
+}))
 const hostRole = computed(() => (role.value === 'none' ? undefined : role.value))
 const options = computed(() => ({
   wrap: wrapOverride.value === 'default' ? undefined : wrapOverride.value,
@@ -49,14 +53,18 @@ const options = computed(() => ({
     <label class="pg-label"><input type="checkbox" v-model="rtl" /> RTL</label>
   </div>
 
-  <div :key="role" class="strip" :class="{ vertical: shown.axis.startsWith('block') }"
+  <div class="strip" :class="{ vertical: shown.axis.startsWith('block') }"
     :role="hostRole" :dir="rtl ? 'rtl' : 'ltr'" aria-label="Demo group"
     v-keyboard-navigation="options">
     <button v-for="n in 5" :key="n" class="cell">{{ n }}</button>
   </div>
 
-  <p class="pg-kv">default axis: {{ shown.axis }}</p>
-  <p class="pg-kv">default ends: {{ shown.wrap }}</p>
+  <p class="pg-kv">default axis: <code class="axis">{{ shown.axis }}</code></p>
+  <p class="pg-kv">default ends: <code class="ends">{{ shown.wrap }}</code></p>
+  <p class="pg-kv">
+    default <code>skipDisabled</code>: <code class="skip">{{ shown.skipDisabled }}</code>
+    <span class="pg-muted">— see card 14</span>
+  </p>
 
   <p class="pg-muted">
     Defaults come from the role, following the APG: a toolbar and a listbox stop at the ends
@@ -68,6 +76,14 @@ const options = computed(() => ({
     Turn on RTL with a horizontal role: <kbd>←</kbd> becomes "next". Orientation is never inferred
     from the measured layout — only from <code>role</code>, <code>aria-orientation</code> or the
     option — because a rule that read the box would change the keyboard on a window resize.
+  </p>
+  <p class="pg-muted">
+    Two things this card is careful about. The table above is
+    <code>ROLE_DEFAULTS</code>/<code>NO_ROLE_DEFAULTS</code> imported from the library, not a copy
+    — a second hand-maintained table would drift the moment a default changed. And the host is
+    <em>not</em> keyed on the role, so switching it re-resolves the options on the mounted
+    directive rather than tearing it down and building a new one: this card is the only live proof
+    that changing <code>role</code> at runtime works without a remount.
   </p>
 </template>
 

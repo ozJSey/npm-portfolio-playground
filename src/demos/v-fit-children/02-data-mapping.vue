@@ -105,7 +105,10 @@ function onUpdate(e: Event) {
   </p>
   <p class="pg-muted">
     <code>data</code> must map 1:1 with the immediate children. <code>hiddenIndices</code> is always
-    emitted, so you can map manually when your children are not a straight <code>v-for</code>.
+    emitted, but it counts <em>DOM positions</em> — decorative children and <code>v-show</code>
+    children included — so it is not an index into your array unless the row is a straight
+    <code>v-for</code> like this one. Card 8 is the row where the two part company; there,
+    <code>hiddenData</code> is the one to read.
     <br /><br />
     <strong>The overflow trigger is a sibling that resizes itself.</strong> When it grows, the row
     loses that width — but the host's own box and the frame's box are both unchanged, so an

@@ -978,6 +978,146 @@ const CHECKS = [
       }
     },
   },
+  /* --------------------------------------------------------------------- *
+   *  0.1.1 — overlapping drops. The live defect this package was patched   *
+   *  for. jsdom cannot see it: it needs two real requests with different   *
+   *  latencies open on the same zone at the same time.                     *
+   * --------------------------------------------------------------------- */
+  {
+    demo: '09-css-progress.vue',
+    name: 'a second drop that finishes FIRST does not report the zone as done',
+    fn: async () => {
+      const s = __dz.stage('09-css-progress.vue')
+      const z = __dz.zone('09-css-progress.vue')
+      const sel = [...s.querySelectorAll('select')].find((e) => __dz.txt(e).includes('upload-slow'))
+      __dz.set(sel, '/api/upload-slow')
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('slow-a.bin', 'application/octet-stream'), __dz.file('slow-b.bin', 'application/octet-stream')])
+      await __dz.until(() => z.getAttribute('data-dropzone') === 'uploading', 3000)
+      // Same zone, fast endpoint: this pair answers ~3s before the first pair.
+      __dz.set(sel, '/api/upload')
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('fast-c.bin', 'application/octet-stream'), __dz.file('fast-d.bin', 'application/octet-stream')])
+      await __dz.sleep(2200)
+      const mid = {
+        state: z.getAttribute('data-dropzone'),
+        pending: z.style.getPropertyValue('--dropzone-files-pending'),
+      }
+      const settled = await __dz.until(() => {
+        const st = z.getAttribute('data-dropzone')
+        return st === 'success' || st === 'error' ? st : null
+      }, 8000)
+      return {
+        pass: mid.state === 'uploading' && mid.pending === '2' && settled === 'success',
+        detail: `with slow-a/slow-b still open: state=${mid.state} files-pending=${mid.pending} (0.1.0 read success/0); once everything answered: ${settled}`,
+      }
+    },
+  },
+  {
+    demo: '09-css-progress.vue',
+    name: 'a failure in the second drop is not swallowed by the first drop settling',
+    fn: async () => {
+      const s = __dz.stage('09-css-progress.vue')
+      const z = __dz.zone('09-css-progress.vue')
+      const sel = [...s.querySelectorAll('select')].find((e) => __dz.txt(e).includes('upload-slow'))
+      __dz.set(sel, '/api/upload-slow')
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('slow-a.bin', 'application/octet-stream'), __dz.file('slow-b.bin', 'application/octet-stream')])
+      await __dz.until(() => z.getAttribute('data-dropzone') === 'uploading', 3000)
+      __dz.set(sel, '/api/upload-fail')
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('doomed.bin', 'application/octet-stream')])
+      await __dz.sleep(1400)
+      const mid = {
+        state: z.getAttribute('data-dropzone'),
+        pending: z.style.getPropertyValue('--dropzone-files-pending'),
+      }
+      const final = await __dz.until(() => (z.getAttribute('data-dropzone') === 'error' ? 'error' : null), 8000)
+      return {
+        pass: mid.state === 'uploading' && mid.pending === '2' && final === 'error',
+        detail: `doomed.bin 500s while slow-a/slow-b are open: state=${mid.state} files-pending=${mid.pending}; after everything answered: ${final ?? z.getAttribute('data-dropzone')}`,
+      }
+    },
+  },
+  {
+    demo: '09-css-progress.vue',
+    name: 'DZ-4: a rejected drop clears progress vars left by a settled batch',
+    fn: async () => {
+      const s = __dz.stage('09-css-progress.vue')
+      const z = __dz.zone('09-css-progress.vue')
+      const sel = [...s.querySelectorAll('select')].find((e) => __dz.txt(e).includes('upload-slow'))
+      __dz.set(sel, '/api/upload-fail')
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('boom.bin', 'application/octet-stream')])
+      const errored = await __dz.until(() => z.getAttribute('data-dropzone') === 'error', 6000)
+      const held = z.style.getPropertyValue('--dropzone-files-pending')
+      const heldProgress = z.style.getPropertyValue('--dropzone-progress')
+      // Now reject a drop. Nothing uploaded, so nothing may still be reported.
+      const size = s.querySelector('input[type=number]')
+      __dz.set(size, 1)
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('huge.bin', 'application/octet-stream', 64 * 1024)])
+      await __dz.until(() => z.getAttribute('data-dropzone') === 'rejected', 3000)
+      const during = {
+        state: z.getAttribute('data-dropzone'),
+        progress: z.style.getPropertyValue('--dropzone-progress'),
+        pending: z.style.getPropertyValue('--dropzone-files-pending'),
+      }
+      // …and the auto-clear hands back to the sticky error, not to idle.
+      const back = await __dz.until(() => (z.getAttribute('data-dropzone') === 'error' ? 'error' : null), 4000)
+      return {
+        pass: !!errored && held === '0' && heldProgress !== '' && during.state === 'rejected' && during.progress === '' && during.pending === '' && back === 'error',
+        detail: `reached error=${!!errored}, held progress="${heldProgress}" pending="${held}"; on rejected: state=${during.state} progress="${during.progress}" pending="${during.pending}" (0.1.0 kept both); auto-clear returned to ${back ?? z.getAttribute('data-dropzone')}`,
+      }
+    },
+  },
+  {
+    demo: '05-url-upload.vue',
+    name: 'a throwing headers() reports through onError instead of wedging at uploading',
+    fn: async () => {
+      const s = __dz.stage('05-url-upload.vue')
+      const z = __dz.zone('05-url-upload.vue')
+      const box = __dz.label('05-url-upload.vue', 'token refresh throws').querySelector('input[type=checkbox]')
+      __dz.set(box, true)
+      await __dz.sleep(250)
+      __dz.drop(z, [__dz.file('one.bin', 'application/octet-stream'), __dz.file('two.bin', 'application/octet-stream')])
+      const log = await __dz.until(() => {
+        const t = __dz.txt(s.querySelector('.pg-log'))
+        return t.includes('token refresh failed') ? t : null
+      }, 6000)
+      const state = z.getAttribute('data-dropzone')
+      const both = !!log && log.includes('one.bin') && log.includes('two.bin')
+      return {
+        pass: both && state === 'error',
+        detail: `state=${state}; log=${log || '— nothing logged (0.1.0: the throw escaped the drop listener) —'}`,
+      }
+    },
+  },
+  {
+    demo: '08-auto-upload-queue.vue',
+    name: 'cancel(file) removes a queued file and leaves the zone alone',
+    fn: async () => {
+      const s = __dz.stage('08-auto-upload-queue.vue')
+      const z = __dz.zone('08-auto-upload-queue.vue')
+      __dz.drop(z, [__dz.file('keep.bin', 'application/octet-stream'), __dz.file('drop-me.bin', 'application/octet-stream')])
+      const queued = await __dz.until(() => {
+        const rows = [...s.querySelectorAll('.queue li')]
+        return rows.length === 2 ? rows.map((r) => __dz.txt(r.querySelector('.name'))) : null
+      }, 4000)
+      const stateBefore = z.getAttribute('data-dropzone')
+      const row = [...s.querySelectorAll('.queue li')].find((r) => __dz.txt(r).includes('drop-me.bin'))
+      const remove = [...row.querySelectorAll('button')].find((b) => __dz.txt(b) === 'remove')
+      remove.click()
+      const after = await __dz.until(() => {
+        const rows = [...s.querySelectorAll('.queue li')]
+        return rows.length === 1 ? rows.map((r) => __dz.txt(r.querySelector('.name'))) : null
+      }, 3000)
+      return {
+        pass: !!queued && !!after && after[0] === 'keep.bin' && z.getAttribute('data-dropzone') === stateBefore,
+        detail: `queued=[${queued}] → after remove=[${after}] (0.1.0: cancel(pending) was a silent no-op); state ${stateBefore} → ${z.getAttribute('data-dropzone')}`,
+      }
+    },
+  },
 ]
 
 /** What demo 12 reports after a folder landed on it. */
@@ -1214,7 +1354,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: '@ozjsey/v-dropzone',
+  library: 'v-dropzone',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

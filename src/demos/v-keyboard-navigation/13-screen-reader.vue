@@ -30,6 +30,16 @@ const checks = [
     ],
   },
   {
+    id: 'skipping',
+    what: 'Skipped items — the two lists that must not diverge',
+    steps: [
+      'Tab into the "skipping" menu. Arrow down through it. The arrows stop on New, Open and Rename and step over Paste.',
+      'Now read the same menu with the virtual cursor (NVDA/JAWS browse mode, or VO+Right on macOS). You WILL reach Paste — it is still in the accessibility tree. It must be announced as "dimmed" / "unavailable"; if it is announced as an ordinary item, the two lists have diverged and the aria-disabled is missing.',
+      'Reach "Load more…" with Tab, not with the arrows. It carries focusgroup="none", so the arrows never stop there and it keeps its own tab stop — an item the arrows skip AND Tab cannot reach would be operable by nobody.',
+      'Switch the group to role="menu" in card 14 and repeat: a menu keeps its unavailable options reachable by arrow, on the APG\'s argument that the set of options is itself information. Confirm the reader still says "dimmed" when you land on one.',
+    ],
+  },
+  {
     id: 'browse',
     what: 'Browse / virtual cursor — the one keyboard testing cannot cover',
     steps: [
@@ -54,8 +64,11 @@ const selected = ref('Berlin')
     <strong>Keyboard testing alone cannot validate this package.</strong> In NVDA/JAWS browse mode
     the arrow keys are taken by the virtual cursor and never reach the handler at all, so a green
     keyboard run says nothing about the screen-reader experience. This card is the manual pass —
-    the three widgets below plus what to listen for at each step. Until somebody runs it, the
-    behaviour is <em>unproven</em>, not passing.
+    the four widgets below plus what to listen for at each step. Until somebody runs it, the
+    behaviour is <em>unproven</em>, not passing. The <em>skipping</em> walkthrough is the sharpest
+    of the four: a skipped item is invisible to the arrows and still in the accessibility tree, so
+    it is the one place where a sighted keyboard user and a browse-mode user can end up navigating
+    two different lists.
   </p>
 
   <div class="pg-row" style="align-items: flex-start; gap: 1.5rem; margin-bottom: 0.8rem">
@@ -77,6 +90,17 @@ const selected = ref('Berlin')
           {{ city }}
         </li>
       </ul>
+    </div>
+
+    <div>
+      <h5 class="head">skipping</h5>
+      <div class="strip vertical" role="toolbar" aria-label="Skipping" v-keyboard-navigation>
+        <button class="cell">New</button>
+        <button class="cell">Open…</button>
+        <button class="cell" aria-disabled="true">Paste</button>
+        <button class="cell">Rename</button>
+        <button class="cell" focusgroup="none">Load more…</button>
+      </div>
     </div>
 
     <div>
@@ -102,6 +126,16 @@ const selected = ref('Berlin')
   </div>
 
   <p class="pg-muted">
+    <strong><code>hover: true</code> (cards 16 and 17) is meaningless here, and that is the
+    point.</strong> A browse-mode user has no cursor, so hover can only ever be an <em>additional</em>
+    input on top of a keyboard path that is already complete. Everything hover can activate, the
+    arrows already reach; hovering an item the arrows skip does nothing, so the two lists cannot
+    disagree; and hover writes no ARIA of its own — it moves the same
+    <code>aria-activedescendant</code> a key would have moved. If a walkthrough below ever needs
+    the mouse to pass, the feature has been built wrong.
+  </p>
+
+  <p class="pg-muted">
     Note what the directive is <em>not</em> responsible for in any of these: the group's role and
     accessible name, <code>aria-setsize</code>/<code>aria-posinset</code>, and
     <code>aria-selected</code> are all written by this card. If a reader announces "list box" with
@@ -125,6 +159,17 @@ const selected = ref('Berlin')
   padding: 0.3rem;
   border: 1px solid #dfe3ec;
   border-radius: 10px;
+}
+.strip.vertical {
+  flex-direction: column;
+  align-items: stretch;
+}
+.cell[data-keyboard-navigation-item='skipped'] {
+  color: #9ca3af;
+}
+.cell[focusgroup='none'] {
+  border-style: dashed;
+  color: #b45309;
 }
 .cell {
   border: 1px solid #e3e7f0;

@@ -61,6 +61,39 @@ async function press(ctx, name, times = 1) {
   }
 }
 
+/**
+ * One real cursor movement through the browser's own input pipeline.
+ *
+ * `Input.dispatchMouseEvent` is what makes this a *cursor* rather than a
+ * synthetic event: Chrome updates its own hit-test position, so the compat
+ * `mousemove` / `pointermove` it later fires when a scroll moves the document
+ * under a stationary cursor carries these same coordinates — which is the
+ * whole thing the hover guard is written against, and the whole thing a
+ * `dispatchEvent(new MouseEvent(...))` cannot reproduce.
+ */
+async function moveMouse(ctx, x, y) {
+  await ctx.cdp.send(
+    'Input.dispatchMouseEvent',
+    { type: 'mouseMoved', x, y, button: 'none', buttons: 0, pointerType: 'mouse' },
+    ctx.sessionId,
+  )
+  await ctx.page.evaluate('new Promise((r) => requestAnimationFrame(() => r(1)))')
+}
+
+/**
+ * Park the cursor on a point, the way a hand does.
+ *
+ * Two moves, because the very first cursor sample a group ever sees is
+ * recorded as the baseline and deliberately not acted on (`hover.ts`), and a
+ * wait first, because a group is deaf to the cursor for 150ms after a key it
+ * acted on — the belt to the coordinate guard's brace.
+ */
+async function hoverAt(ctx, x, baselineY, targetY) {
+  await ctx.page.evaluate('new Promise((r) => setTimeout(r, 220))')
+  await moveMouse(ctx, x, baselineY)
+  await moveMouse(ctx, x, targetY)
+}
+
 const PRELUDE = `
 window.__kn = Object.assign(Object.create(window.__pg), {
   items(file) { return [...this.stage(file).querySelectorAll('[data-keyboard-navigation-item]')] },
@@ -72,9 +105,33 @@ window.__kn = Object.assign(Object.create(window.__pg), {
     el.focus()
     return el
   },
-  activeLabel() { return this.txt(document.activeElement) },
+  /** data-label first: a row whose text carries a state badge still names itself. */
+  activeLabel() {
+    const el = document.activeElement
+    return (el && el.getAttribute && el.getAttribute('data-label')) || this.txt(el)
+  },
+  pane(file, id) { return this.stage(file).querySelector('[data-pane="' + id + '"]') },
+  paneTop(file, id) { const p = this.pane(file, id); return p ? Math.round(p.scrollTop) : -1 },
+  paneRows(file, id) { return [...this.pane(file, id).querySelectorAll('[role=option]')] },
+  /** Vue renders on a microtask; one macrotask later the DOM has caught up. */
+  settled() { return this.sleep(0) },
   marked(file) { return this.txt(this.stage(file).querySelector('[data-keyboard-navigation-item="active"]')) },
   tabbable(file) { return [...this.stage(file).querySelectorAll('[tabindex="0"]')] },
+  /** Put a card in the middle of the viewport, so CDP mouse coordinates land on it. */
+  showCard(file) {
+    this.sec(file).scrollIntoView({ block: 'center' })
+    return true
+  },
+  /** Viewport rect of one element inside a card, rounded for CDP. */
+  box(file, sel) {
+    const el = this.stage(file).querySelector(sel)
+    if (!el) throw new Error('no ' + sel + ' in ' + file)
+    const r = el.getBoundingClientRect()
+    return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+  },
+  kv(file, needle) {
+    return this.txt([...this.stage(file).querySelectorAll('.pg-kv')].find((k) => this.txt(k).includes(needle)))
+  },
 })
 'ready'
 `
@@ -112,7 +169,8 @@ const NATIVE_CHECKS = [
       await ctx.page.evaluate(`(async () => {
         const box = __kn.stage('04-listbox-scroll.vue').querySelector('input[type=checkbox]')
         __kn.set(box, false)
-        await __kn.sleep(200)
+        if (!(await __kn.until(() => box.checked === false))) throw new Error('checkbox never cleared')
+        await __kn.settled()
         __kn.focusItem('04-listbox-scroll.vue', 0)
       })()`)
       await press(ctx, 'ArrowDown', 12)
@@ -310,7 +368,9 @@ const NATIVE_CHECKS = [
       await ctx.page.evaluate(`(async () => {
         const selects = __kn.stage('07-wrap-and-orientation.vue').querySelectorAll('select')
         __kn.set(selects[0], 'listbox')
-        await __kn.sleep(250)
+        const host = () => __kn.host('07-wrap-and-orientation.vue')
+        if (!(await __kn.until(() => host().getAttribute('role') === 'listbox')))
+          throw new Error('the host never became a listbox')
         __kn.focusItem('07-wrap-and-orientation.vue', 0)
       })()`)
       await press(ctx, 'ArrowRight')
@@ -320,10 +380,13 @@ const NATIVE_CHECKS = [
 
       await ctx.page.evaluate(`(async () => {
         const s = __kn.stage('07-wrap-and-orientation.vue')
+        const host = () => __kn.host('07-wrap-and-orientation.vue')
         __kn.set(s.querySelectorAll('select')[0], 'toolbar')
-        await __kn.sleep(200)
+        if (!(await __kn.until(() => host().getAttribute('role') === 'toolbar')))
+          throw new Error('the host never became a toolbar')
         __kn.set(s.querySelector('input[type=checkbox]'), true)
-        await __kn.sleep(250)
+        if (!(await __kn.until(() => host().getAttribute('dir') === 'rtl')))
+          throw new Error('the host never went RTL')
         __kn.focusItem('07-wrap-and-orientation.vue', 0)
       })()`)
       await press(ctx, 'ArrowLeft')
@@ -346,8 +409,11 @@ const NATIVE_CHECKS = [
       await ctx.page.evaluate(`__kn.focusItem('08-dynamic-list.vue', 1)`)
       const before = await ctx.page.evaluate(`__kn.activeLabel()`)
       await ctx.page.evaluate(`(async () => {
+        const rows = () => __kn.stage('08-dynamic-list.vue').querySelectorAll('[role=option]').length
+        const before = rows()
         __kn.button('08-dynamic-list.vue', 'Remove focused').click()
-        await __kn.sleep(300)
+        if (!(await __kn.until(() => rows() === before - 1))) throw new Error('no row was removed')
+        await __kn.settled()
       })()`)
       const after = await ctx.page.evaluate(`(() => ({
         label: __kn.activeLabel(),
@@ -366,16 +432,20 @@ const NATIVE_CHECKS = [
     name: 'emptied and refilled: state says empty, then exactly one tab stop returns',
     async run(ctx) {
       const emptied = await ctx.page.evaluate(`(async () => {
+        const rows = () => __kn.stage('08-dynamic-list.vue').querySelectorAll('[role=option]').length
         __kn.button('08-dynamic-list.vue', 'Remove all').click()
-        await __kn.sleep(300)
+        if (!(await __kn.until(() => rows() === 0))) throw new Error('the list never emptied')
+        await __kn.settled()
         return {
           state: __kn.host('08-dynamic-list.vue').getAttribute('data-keyboard-navigation-state'),
           tabbable: __kn.tabbable('08-dynamic-list.vue').length,
         }
       })()`)
       const refilled = await ctx.page.evaluate(`(async () => {
+        const rows = () => __kn.stage('08-dynamic-list.vue').querySelectorAll('[role=option]').length
         __kn.button('08-dynamic-list.vue', 'Refill').click()
-        await __kn.sleep(300)
+        if (!(await __kn.until(() => rows() === 4))) throw new Error('the list never refilled')
+        await __kn.settled()
         return {
           state: __kn.host('08-dynamic-list.vue').getAttribute('data-keyboard-navigation-state'),
           tabbable: __kn.tabbable('08-dynamic-list.vue').length,
@@ -398,22 +468,41 @@ const NATIVE_CHECKS = [
   },
   {
     demo: '08-dynamic-list.vue',
-    name: 'disabling the tabbable row hands its tabindex back rather than leaving two',
+    name: 'disabling the tabbable row moves the stop and pins the row at -1, never two stops',
     async run(ctx) {
       const out = await ctx.page.evaluate(`(async () => {
         __kn.focusItem('08-dynamic-list.vue', 0)
         const first = __kn.items('08-dynamic-list.vue')[0]
-        __kn.button('08-dynamic-list.vue', 'Disable focused').click()
-        await __kn.sleep(300)
-        return {
+        __kn.button('08-dynamic-list.vue', 'Toggle disabled').click()
+        if (!(await __kn.until(() => first.getAttribute('data-keyboard-navigation-item') === 'skipped')))
+          throw new Error('the row never became skipped')
+        await __kn.settled()
+        const disabled = {
           tabbable: __kn.tabbable('08-dynamic-list.vue').length,
           firstTabIndex: first.getAttribute('tabindex'),
           marked: __kn.marked('08-dynamic-list.vue'),
         }
+        // The other half of the toggle, which used to be unreachable from the
+        // card's own UI: the skipped row is still clickable at -1.
+        first.focus()
+        __kn.button('08-dynamic-list.vue', 'Toggle disabled').click()
+        if (!(await __kn.until(() => first.getAttribute('data-keyboard-navigation-item') !== 'skipped')))
+          throw new Error('the row never came back')
+        await __kn.settled()
+        return {
+          ...disabled,
+          backTabbable: __kn.tabbable('08-dynamic-list.vue').length,
+          backItem: first.getAttribute('data-keyboard-navigation-item'),
+        }
       })()`)
       return {
-        pass: out.tabbable === 1 && out.firstTabIndex === null && out.marked.startsWith('Bravo'),
-        detail: `tabbable=${out.tabbable} disabled-row tabindex=${out.firstTabIndex} active=${out.marked}`,
+        pass:
+          out.tabbable === 1 &&
+          out.firstTabIndex === '-1' &&
+          out.marked.startsWith('Bravo') &&
+          out.backTabbable === 1 &&
+          out.backItem !== 'skipped',
+        detail: `disabled: tabbable=${out.tabbable} row tabindex=${out.firstTabIndex} active=${out.marked}; re-enabled: tabbable=${out.backTabbable} item=${out.backItem}`,
       }
     },
   },
@@ -453,8 +542,10 @@ const NATIVE_CHECKS = [
       await press(ctx, 'PageUp')
       const back = await ctx.page.evaluate(`__kn.activeLabel()`)
       await ctx.page.evaluate(`(async () => {
-        __kn.set(__kn.stage('10-page-keys.vue').querySelector('select'), 'fixed')
-        await __kn.sleep(250)
+        const select = __kn.stage('10-page-keys.vue').querySelector('select')
+        __kn.set(select, 'fixed')
+        if (!(await __kn.until(() => select.value === 'fixed'))) throw new Error('page mode never changed')
+        await __kn.settled()
         __kn.focusItem('10-page-keys.vue', 0)
       })()`)
       await press(ctx, 'PageDown')
@@ -474,8 +565,12 @@ const NATIVE_CHECKS = [
     name: 'a key move is reported once, as reason "key"',
     async run(ctx) {
       await ctx.page.evaluate(`(async () => {
+        // An empty log renders one placeholder <li>, so "no lines" is the
+        // placeholder being the only child — not a count of zero.
+        const empty = () => !!__kn.stage('12-events-and-state.vue').querySelector('.pg-log .pg-muted')
         __kn.button('12-events-and-state.vue', 'Clear log').click()
-        await __kn.sleep(150)
+        if (!(await __kn.until(empty))) throw new Error('the log never cleared')
+        await __kn.settled()
         __kn.focusItem('12-events-and-state.vue', 0)
       })()`)
       await press(ctx, 'ArrowDown')
@@ -493,6 +588,418 @@ const NATIVE_CHECKS = [
       }
     },
   },
+
+  // -------------------------------------------------------------------------
+  // 14 — skipping: the per-role default, and the group that skips everything
+  // -------------------------------------------------------------------------
+  {
+    demo: '14-skipping.vue',
+    name: 'a menu stops on its unavailable option; a toolbar steps over it',
+    async run(ctx) {
+      await ctx.page.evaluate(`__kn.focusItem('14-skipping.vue', 0)`)
+      await press(ctx, 'ArrowDown', 2)
+      const menu = await ctx.page.evaluate(`__kn.activeLabel()`)
+
+      await ctx.page.evaluate(`(async () => {
+        const select = __kn.stage('14-skipping.vue').querySelectorAll('select')[0]
+        __kn.set(select, 'toolbar')
+        const host = () => __kn.host('14-skipping.vue')
+        if (!(await __kn.until(() => host().getAttribute('role') === 'toolbar')))
+          throw new Error('the host never became a toolbar')
+        if (!(await __kn.until(() => host().querySelector('[data-keyboard-navigation-item="skipped"]'))))
+          throw new Error('nothing was ever marked skipped')
+        __kn.focusItem('14-skipping.vue', 0)
+      })()`)
+      await press(ctx, 'ArrowRight', 2)
+      const toolbar = await ctx.page.evaluate(`(() => ({
+        label: __kn.activeLabel(),
+        skipped: [...__kn.host('14-skipping.vue')
+          .querySelectorAll('[data-keyboard-navigation-item="skipped"]')]
+          .map((el) => el.getAttribute('data-label')),
+      }))()`)
+
+      return {
+        // menu: role default skipDisabled=false, so ↓↓ from "New file" lands
+        // ON Paste. toolbar: skipDisabled=true, so →→ steps past it to Rename.
+        pass: menu === 'Paste' && toolbar.label === 'Rename' && toolbar.skipped.join() === 'Paste',
+        detail: `menu ↓↓ → ${menu}; toolbar →→ → ${toolbar.label} (skipped: ${toolbar.skipped})`,
+      }
+    },
+  },
+  {
+    demo: '14-skipping.vue',
+    name: 'skipDisabled beats the role default in both directions',
+    async run(ctx) {
+      const setUp = (role, override) => `(async () => {
+        const s = __kn.stage('14-skipping.vue')
+        const selects = s.querySelectorAll('select')
+        __kn.set(selects[0], '${role}')
+        __kn.set(selects[1], '${override}')
+        const host = () => __kn.host('14-skipping.vue')
+        if (!(await __kn.until(() => host().getAttribute('role') === '${role}')))
+          throw new Error('role never changed')
+        if (!(await __kn.until(() => __kn.txt(s.querySelector('.effective')) === '${override === 'skip'}')))
+          throw new Error('the readout never showed the override')
+        __kn.focusItem('14-skipping.vue', 0)
+      })()`
+
+      // A menu told to skip: ↓↓ from "New file" clears Paste and lands on Rename.
+      await ctx.page.evaluate(setUp('menu', 'skip'))
+      await press(ctx, 'ArrowDown', 2)
+      const menuSkipping = await ctx.page.evaluate(`__kn.activeLabel()`)
+
+      // A toolbar told to keep: →→ stops on Paste.
+      await ctx.page.evaluate(setUp('toolbar', 'keep'))
+      await press(ctx, 'ArrowRight', 2)
+      const toolbarKeeping = await ctx.page.evaluate(`(() => ({
+        label: __kn.activeLabel(),
+        skipped: __kn.host('14-skipping.vue')
+          .querySelectorAll('[data-keyboard-navigation-item="skipped"]').length,
+      }))()`)
+
+      return {
+        pass: menuSkipping === 'Rename' && toolbarKeeping.label === 'Paste' && toolbarKeeping.skipped === 0,
+        detail: `menu+skip ↓↓ → ${menuSkipping}; toolbar+keep →→ → ${toolbarKeeping.label} (${toolbarKeeping.skipped} skipped)`,
+      }
+    },
+  },
+  {
+    demo: '14-skipping.vue',
+    name: 'every row skipped: the group keeps one tab stop, says empty, and claims no key',
+    async run(ctx) {
+      const measured = await ctx.page.evaluate(`(async () => {
+        const s = __kn.stage('14-skipping.vue')
+        // The card opens on role="menu", which KEEPS its disabled options —
+        // so "disable every row" alone changes nothing, which is the per-role
+        // default doing its job. Ask for skipping explicitly.
+        __kn.set(s.querySelectorAll('select')[1], 'skip')
+        __kn.set(s.querySelector('input[type=checkbox]'), true)
+        const host = () => __kn.host('14-skipping.vue')
+        if (!(await __kn.until(() => host().getAttribute('data-keyboard-navigation-state') === 'empty')))
+          throw new Error('the group never reported empty')
+        __kn.button('14-skipping.vue', 'Measure').click()
+        await __kn.settled()
+        const stop = host().querySelector('[tabindex="0"]')
+        stop.focus()
+        return {
+          state: __kn.txt(s.querySelector('.state')),
+          items: __kn.txt(s.querySelector('.count-items')),
+          skipped: __kn.txt(s.querySelector('.count-skipped')),
+          tabbable: __kn.txt(s.querySelector('.count-tabbable')),
+          holder: stop.getAttribute('data-label'),
+          focused: document.activeElement.getAttribute('data-label'),
+        }
+      })()`)
+
+      // Nowhere to go, so the key is not claimed and focus does not move.
+      await press(ctx, 'ArrowDown')
+      const after = await ctx.page.evaluate(`(() => ({
+        focused: document.activeElement.getAttribute('data-label'),
+        // Tab out of the one stop and the opted-out row is what it reaches:
+        // never touched by the directive, still in the tab order.
+        optedOut: __kn.host('14-skipping.vue').querySelector('[focusgroup="none"]').hasAttribute('tabindex'),
+      }))()`)
+      await press(ctx, 'Tab')
+      const tabbed = await ctx.page.evaluate(`document.activeElement.getAttribute('data-label')`)
+
+      return {
+        pass:
+          measured.state === 'empty' &&
+          measured.items === '0' &&
+          measured.skipped === '4' &&
+          measured.tabbable === '1' &&
+          measured.holder === 'New file' &&
+          after.focused === 'New file' &&
+          after.optedOut === false &&
+          tabbed === 'Load more…',
+        detail: `state=${measured.state} items=${measured.items} skipped=${measured.skipped} tabbable=${measured.tabbable} on "${measured.holder}"; ArrowDown → ${after.focused}; Tab → ${tabbed}`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 15 — which box scrolls, with its own negative control
+  // -------------------------------------------------------------------------
+  {
+    demo: '15-two-instances.vue',
+    name: 'two instances of one component each scroll their own pane',
+    async run(ctx) {
+      await ctx.page.evaluate(`__kn.paneRows('15-two-instances.vue', 'right')[0].focus()`)
+      await press(ctx, 'ArrowDown', 6)
+      const out = await ctx.page.evaluate(`(async () => {
+        __kn.button('15-two-instances.vue', 'Measure').click()
+        await __kn.settled()
+        const s = __kn.stage('15-two-instances.vue')
+        return {
+          left: __kn.paneTop('15-two-instances.vue', 'left'),
+          right: __kn.paneTop('15-two-instances.vue', 'right'),
+          readLeft: __kn.txt(s.querySelector('.top-left')),
+          readRight: __kn.txt(s.querySelector('.top-right')),
+          focused: __kn.activeLabel(),
+        }
+      })()`)
+      return {
+        pass: out.right > 0 && out.left === 0 && out.focused === 'R 7' && out.readLeft === '0',
+        detail: `left=${out.left} right=${out.right} (card reads ${out.readLeft}/${out.readRight}), focus=${out.focused}`,
+      }
+    },
+  },
+  {
+    demo: '15-two-instances.vue',
+    name: 'the document-wide getter reproduces the 0.1.0 defect — the FIRST pane scrolls',
+    async run(ctx) {
+      await ctx.page.evaluate(`(async () => {
+        const box = __kn.stage('15-two-instances.vue').querySelector('input[type=checkbox]')
+        __kn.set(box, true)
+        if (!(await __kn.until(() => box.checked === true))) throw new Error('the toggle never set')
+        await __kn.settled()
+        __kn.paneRows('15-two-instances.vue', 'right')[0].focus()
+      })()`)
+      await press(ctx, 'ArrowDown', 6)
+      const out = await ctx.page.evaluate(`(() => ({
+        left: __kn.paneTop('15-two-instances.vue', 'left'),
+        right: __kn.paneTop('15-two-instances.vue', 'right'),
+        focused: __kn.activeLabel(),
+      }))()`)
+      return {
+        // Arrowing in the right-hand list writes a scrollTop onto the left
+        // one, and the list the user is actually in never follows its focus
+        // ring. This is the negative control for the check above: it is what
+        // `document.querySelector` did to every bare selector in 0.1.0.
+        pass: out.left > 0 && out.right === 0 && out.focused === 'R 7',
+        detail: `left=${out.left} (the WRONG pane) right=${out.right}, focus=${out.focused}`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 16 — hover as an input, and THE TRAP
+  // -------------------------------------------------------------------------
+  {
+    demo: '16-hover.vue',
+    name: 'the arrows continue from the row the cursor is on — and do not when hover is off',
+    async run(ctx) {
+      const pane = await ctx.page.evaluate(`(() => {
+        __kn.showCard('16-hover.vue')
+        __kn.focusItem('16-hover.vue', 0)
+        return __kn.box('16-hover.vue', '.list-pane')
+      })()`)
+      // Rows are 40px in a 200px pane: +180 is the middle of the fifth one.
+      const x = pane.left + 60
+      const onRowFive = pane.top + 180
+
+      await press(ctx, 'ArrowDown', 2)
+      const afterKeys = await ctx.page.evaluate(`__kn.marked('16-hover.vue')`)
+      await hoverAt(ctx, x, pane.top + 20, onRowFive)
+      const hovered = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('16-hover.vue'),
+        reason: __kn.kv('16-hover.vue', 'reason:'),
+        focused: __kn.activeLabel(),
+      }))()`)
+      await press(ctx, 'ArrowDown')
+      const continued = await ctx.page.evaluate(`__kn.marked('16-hover.vue')`)
+
+      // The negative control, in the card itself: with `hover: false` the same
+      // three gestures leave the active row exactly where the keys put it.
+      await ctx.page.evaluate(`(async () => {
+        const box = __kn.label('16-hover.vue', 'hover').querySelector('input')
+        __kn.set(box, false)
+        if (!(await __kn.until(() => box.checked === false))) throw new Error('the hover toggle never cleared')
+        await __kn.settled()
+        __kn.button('16-hover.vue', 'Reset').click()
+        await __kn.settled()
+      })()`)
+      await press(ctx, 'ArrowDown', 2)
+      await hoverAt(ctx, x, pane.top + 20, onRowFive)
+      const off = await ctx.page.evaluate(`__kn.marked('16-hover.vue')`)
+      await press(ctx, 'ArrowDown')
+      const offAfter = await ctx.page.evaluate(`__kn.marked('16-hover.vue')`)
+
+      return {
+        pass:
+          afterKeys === 'Row 3' &&
+          hovered.marked === 'Row 5' &&
+          hovered.reason.includes('hover') &&
+          // Focus followed the cursor, because the keyboard was already
+          // standing on one of these rows — one highlight, not two.
+          hovered.focused === 'Row 5' &&
+          continued === 'Row 6' &&
+          off === 'Row 3' &&
+          offAfter === 'Row 4',
+        detail: `keys→${afterKeys}, hover→${hovered.marked} (${hovered.reason}, focus ${hovered.focused}), ↓→${continued}; hover:false → ${off} then ${offAfter}`,
+      }
+    },
+  },
+  {
+    demo: '16-hover.vue',
+    name: 'THE TRAP: the list scrolling under a stationary cursor must not move the active row',
+    async run(ctx) {
+      const pane = await ctx.page.evaluate(`(() => {
+        __kn.showCard('16-hover.vue')
+        __kn.button('16-hover.vue', 'Reset').click()
+        return __kn.box('16-hover.vue', '.list-pane')
+      })()`)
+      const x = pane.left + 60
+      // Dead centre of the pane — row 3 at scrollTop 0, and a different row
+      // after every 40px the list scrolls.
+      const y = pane.top + 100
+
+      await hoverAt(ctx, x, pane.top + 20, y)
+      const parked = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('16-hover.vue'),
+        hovers: Number(__kn.txt(__kn.stage('16-hover.vue').querySelector('.hover-count'))),
+      }))()`)
+
+      // Hand off the mouse. Every key from here on scrolls the list under a
+      // cursor that does not move.
+      await press(ctx, 'ArrowDown', 12)
+
+      const out = await ctx.page.evaluate(`(() => {
+        const pane = __kn.stage('16-hover.vue').querySelector('.list-pane')
+        const r = pane.getBoundingClientRect()
+        return {
+          marked: __kn.marked('16-hover.vue'),
+          scrollTop: Math.round(pane.scrollTop),
+          hovers: Number(__kn.txt(__kn.stage('16-hover.vue').querySelector('.hover-count'))),
+          keys: Number(__kn.txt(__kn.stage('16-hover.vue').querySelector('.key-count'))),
+          paneTop: Math.round(r.top),
+          paneLeft: Math.round(r.left),
+        }
+      })()`)
+
+      return {
+        pass:
+          parked.marked === 'Row 3' &&
+          parked.hovers === 1 &&
+          // Twelve keys from Row 3, and the list scrolled 400px underneath a
+          // cursor that never moved. One hover total — the deliberate one.
+          out.marked === 'Row 15' &&
+          out.scrollTop === 400 &&
+          out.hovers === 1 &&
+          out.keys === 12 &&
+          // The card did not move under us, so the cursor really was over the
+          // pane for the whole run.
+          out.paneTop === pane.top &&
+          out.paneLeft === pane.left,
+        detail: `parked on ${parked.marked}; after 12×↓ active=${out.marked} scrollTop=${out.scrollTop} hoverMoves=${out.hovers} keyMoves=${out.keys} (pane ${out.paneLeft},${out.paneTop} was ${pane.left},${pane.top})`,
+      }
+    },
+  },
+  {
+    demo: '16-hover.vue',
+    name: 'a hover does not scroll, where the same move by key does',
+    async run(ctx) {
+      const pane = await ctx.page.evaluate(`(() => {
+        __kn.showCard('16-hover.vue')
+        __kn.focusItem('16-hover.vue', 0)
+        return __kn.box('16-hover.vue', '.list-pane')
+      })()`)
+      const x = pane.left + 60
+
+      await press(ctx, 'ArrowDown', 6)
+      // Misalign the pane so the top row is genuinely clipped: `block:'nearest'`
+      // has something to do, and doing it would drag the list out from under
+      // the mouse.
+      await ctx.page.evaluate(`__kn.stage('16-hover.vue').querySelector('.list-pane').scrollTop = 20`)
+      await hoverAt(ctx, x, pane.top + 120, pane.top + 10)
+      const hovered = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('16-hover.vue'),
+        scrollTop: Math.round(__kn.stage('16-hover.vue').querySelector('.list-pane').scrollTop),
+      }))()`)
+
+      // The same row, reached by key, does scroll — so the assertion above is
+      // about hover and not about a list that never scrolls.
+      await ctx.page.evaluate(`(async () => {
+        __kn.stage('16-hover.vue').querySelector('.list-pane').scrollTop = 20
+        __kn.focusItem('16-hover.vue', 3)
+        await __kn.settled()
+      })()`)
+      await press(ctx, 'Home')
+      const keyed = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('16-hover.vue'),
+        scrollTop: Math.round(__kn.stage('16-hover.vue').querySelector('.list-pane').scrollTop),
+      }))()`)
+
+      return {
+        pass:
+          hovered.marked === 'Row 1' &&
+          hovered.scrollTop === 20 &&
+          keyed.marked === 'Row 1' &&
+          keyed.scrollTop === 0,
+        detail: `hover → ${hovered.marked} scrollTop=${hovered.scrollTop} (unchanged); Home → ${keyed.marked} scrollTop=${keyed.scrollTop}`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 17 — the combobox: hover that never blurs the input
+  // -------------------------------------------------------------------------
+  {
+    demo: '17-combobox.vue',
+    name: 'type, arrow, hover — and focus never leaves the input',
+    async run(ctx) {
+      await ctx.page.evaluate(`(() => {
+        __kn.showCard('17-combobox.vue')
+        __kn.stage('17-combobox.vue').querySelector('#combo-input').focus()
+        return true
+      })()`)
+      await press(ctx, 'a')
+      const typed = await ctx.page.evaluate(`(async () => {
+        await __kn.settled()
+        const input = __kn.stage('17-combobox.vue').querySelector('#combo-input')
+        return { value: input.value, rows: __kn.items('17-combobox.vue').length, focused: document.activeElement.id }
+      })()`)
+
+      await press(ctx, 'ArrowDown', 3)
+      const arrowed = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('17-combobox.vue'),
+        focused: document.activeElement.id,
+        pointer: __kn.stage('17-combobox.vue').querySelector('#combo-input').getAttribute('aria-activedescendant'),
+      }))()`)
+
+      const box = await ctx.page.evaluate(`__kn.box('17-combobox.vue', '#combo-list')`)
+      const x = box.left + 60
+      await hoverAt(ctx, x, box.top + 15, box.top + 165)
+      const hovered = await ctx.page.evaluate(`(() => ({
+        marked: __kn.marked('17-combobox.vue'),
+        focused: document.activeElement.id,
+        reason: __kn.kv('17-combobox.vue', 'last reason:'),
+        pointer: __kn.stage('17-combobox.vue').querySelector('#combo-input').getAttribute('aria-activedescendant'),
+      }))()`)
+
+      await press(ctx, 'ArrowDown')
+      const continued = await ctx.page.evaluate(`__kn.marked('17-combobox.vue')`)
+
+      // The letters still land in the field: nothing ever took the focus.
+      await press(ctx, 'n')
+      const stillTyping = await ctx.page.evaluate(`(async () => {
+        await __kn.settled()
+        const input = __kn.stage('17-combobox.vue').querySelector('#combo-input')
+        return { value: input.value, focused: document.activeElement.id }
+      })()`)
+
+      // Filtered on "a": Amsterdam, Ankara, Athens, Barcelona, Bratislava,
+      // Bucharest, … — 'Berlin' and 'Bern' carry no 'a' and are not in it.
+      return {
+        pass:
+          typed.value === 'a' &&
+          typed.focused === 'combo-input' &&
+          // Three ArrowDowns: the first lands ON the first option.
+          arrowed.marked === 'Athens' &&
+          arrowed.focused === 'combo-input' &&
+          arrowed.pointer === 'combo-Athens' &&
+          // The sixth 30px row in a 180px list.
+          hovered.marked === 'Bucharest' &&
+          hovered.focused === 'combo-input' &&
+          hovered.reason.includes('hover') &&
+          hovered.pointer === 'combo-Bucharest' &&
+          continued === 'Budapest' &&
+          stillTyping.value === 'an' &&
+          stillTyping.focused === 'combo-input',
+        detail: `typed "${typed.value}" (${typed.rows} rows, focus ${typed.focused}); 3×↓ → ${arrowed.marked}; hover → ${hovered.marked} (${hovered.reason}, focus ${hovered.focused}, pointer ${hovered.pointer}); ↓ → ${continued}; typed again → "${stillTyping.value}" focus ${stillTyping.focused}`,
+      }
+    },
+  },
 ]
 
 const CHECKS = [
@@ -501,11 +1008,15 @@ const CHECKS = [
     name: 'the api drives the group and reports where it landed',
     fn: async () => {
       const s = __kn.stage('11-api.vue')
+      const active = () => document.activeElement
+      const before = active()
       __kn.button('11-api.vue', 'last()').click()
-      await __kn.sleep(150)
+      if (!(await __kn.until(() => active() !== before))) throw new Error('last() moved nothing')
+      const afterLast = active()
       const last = { focus: __kn.activeLabel(), marked: __kn.marked('11-api.vue') }
       __kn.button('11-api.vue', 'previous()').click()
-      await __kn.sleep(150)
+      if (!(await __kn.until(() => active() !== afterLast))) throw new Error('previous() moved nothing')
+      await __kn.settled()
       const kv = [...s.querySelectorAll('.pg-kv')].map((k) => __kn.txt(k))
       return {
         pass: last.focus === '8' && last.marked === '8' && kv[0].includes('6') && kv[2].includes('8'),
@@ -518,8 +1029,10 @@ const CHECKS = [
     name: 'enabled: false gives every tabindex back and reports the state',
     fn: async () => {
       const before = __kn.tabbable('11-api.vue').length
-      __kn.set(__kn.label('11-api.vue', 'enabled').querySelector('input'), false)
-      await __kn.sleep(250)
+      const box = __kn.label('11-api.vue', 'enabled').querySelector('input')
+      __kn.set(box, false)
+      if (!(await __kn.until(() => box.checked === false))) throw new Error('the toggle never cleared')
+      await __kn.settled()
       const host = __kn.host('11-api.vue')
       const after = {
         tabbable: __kn.tabbable('11-api.vue').length,
@@ -537,14 +1050,17 @@ const CHECKS = [
     name: 'a group filtered down to nothing reports empty instead of going quiet',
     fn: async () => {
       const input = __kn.stage('12-events-and-state.vue').querySelector('input.pg-input')
+      const rows = () => __kn.stage('12-events-and-state.vue').querySelectorAll('[role=option]').length
       __kn.set(input, 'z')
-      await __kn.sleep(300)
+      if (!(await __kn.until(() => rows() === 0))) throw new Error('the filter never emptied the list')
+      await __kn.settled()
       const empty = {
         state: __kn.host('12-events-and-state.vue').getAttribute('data-keyboard-navigation-state'),
         tabbable: __kn.tabbable('12-events-and-state.vue').length,
       }
       __kn.set(input, '')
-      await __kn.sleep(300)
+      if (!(await __kn.until(() => rows() === 4))) throw new Error('the list never came back')
+      await __kn.settled()
       const back = {
         state: __kn.host('12-events-and-state.vue').getAttribute('data-keyboard-navigation-state'),
         tabbable: __kn.tabbable('12-events-and-state.vue').length,
@@ -557,30 +1073,41 @@ const CHECKS = [
   },
   {
     demo: '13-screen-reader.vue',
-    name: 'three groups on one card carry exactly one tab stop each',
+    name: 'four groups on one card carry exactly one tab stop each',
     fn: async () => {
       const s = __kn.stage('13-screen-reader.vue')
       const hosts = [...s.querySelectorAll('[data-keyboard-navigation-state]')]
       const stops = hosts.map((h) => h.querySelectorAll('[tabindex="0"]').length)
-      const ad = hosts[2]
+      const ad = hosts[3]
+      // The skipping widget: the aria-disabled button is held at -1 (not
+      // released, or a native button would be a second tab stop), and the
+      // focusgroup="none" button is not touched at all.
+      const skipping = hosts[2]
+      const skipped = skipping.querySelector('[aria-disabled="true"]')
+      const optedOut = skipping.querySelector('[focusgroup="none"]')
       return {
         pass:
-          hosts.length === 3 &&
+          hosts.length === 4 &&
           stops[0] === 1 &&
           stops[1] === 1 &&
+          stops[2] === 1 &&
           // The activedescendant list is itself the tab stop, so its options
           // are all -1 and the <ul> carries the 0.
-          stops[2] === 0 &&
+          stops[3] === 0 &&
+          skipped.getAttribute('tabindex') === '-1' &&
+          skipped.getAttribute('data-keyboard-navigation-item') === 'skipped' &&
+          !optedOut.hasAttribute('tabindex') &&
+          !optedOut.hasAttribute('data-keyboard-navigation-item') &&
           ad.getAttribute('tabindex') === '0' &&
           !!ad.getAttribute('aria-activedescendant'),
-        detail: `hosts=${hosts.length} stops=${JSON.stringify(stops)} ad-tabindex=${ad.getAttribute('tabindex')}`,
+        detail: `hosts=${hosts.length} stops=${JSON.stringify(stops)} skipped-tabindex=${skipped.getAttribute('tabindex')} optedOut-tabindex=${optedOut.getAttribute('tabindex')} ad-tabindex=${ad.getAttribute('tabindex')}`,
       }
     },
   },
 ]
 
 export default {
-  library: '@ozjsey/v-keyboard-navigation',
+  library: 'v-keyboard-navigation',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

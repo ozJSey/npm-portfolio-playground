@@ -40,8 +40,10 @@ function onUpdate(e: Event) {
   </div>
 
   <p class="pg-muted">
-    Compare with demo 1, where the badge sits below the row and <code>offsetNeededInPx</code>
-    holds width back inside it anyway.
+    Same badge-as-a-sibling shape as demo 1, and the same <code>offsetNeededInPx: 0</code>. The one
+    difference is <code>flex: 1</code> on the host: here the row decides the host's width and the
+    badge is pinned to the right, while demo 1's host is shrink-to-fit and the badge follows the
+    last chip that survived.
   </p>
 </template>
 

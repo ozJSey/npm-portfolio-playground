@@ -1,10 +1,12 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-teleport-to',
+  id: 'v-teleport-to',
+  pkg: '@ozjsey/v-teleport-to',
   tagline:
     'Viewport-aware fixed positioning relative to a reference element — dropdowns, popovers and autocompletes that escape every overflow and clip container without a wrapper component.',
-  status: 'v3.0.0 local — 806/806 tests; the fit test now runs on the default binding (TT-15)',
+  status:
+    'v1.1.0 local — 836/836 tests; the fit test measures the CONTENT, not the box the host happened to have (TT-17/18/19)',
   notes: [
     'Positioning is recomputed on scroll and resize, RAF-batched. Scroll the page or a demo container with a popover open and it tracks.',
     'A template ref is null during the render pass that reads it, so the directive always sees `to: null` on its first mounted call and positions on the update that follows. Nothing to work around — but it means `to` resolving late is the normal path, not an edge case.',
@@ -21,8 +23,15 @@ const manifest: LibraryManifest = {
       file: '02-placement-flip.vue',
       title: 'placement + flip',
       blurb:
-        'Every placement is a preference: the fit test runs on all of them, flip is on by default, and a host with nowhere to go says so.',
-      tags: ['placement', 'flip', 'boundary', 'data-teleport-fit', 'data-teleport-collapsed'],
+        'Every placement is a preference: the fit test runs on all of them, flip is on by default, and a host with nowhere to go says so. Two sliders, because the fit test has two inputs — the room and the content.',
+      tags: [
+        'placement',
+        'flip',
+        'boundary',
+        'data-teleport-fit',
+        'data-teleport-collapsed',
+        'contentHeight',
+      ],
     },
     {
       file: '03-sizing.vue',
@@ -86,6 +95,20 @@ const manifest: LibraryManifest = {
       title: "strategy: 'absolute'",
       blurb: 'Track a scrolling parent by positioning against the offsetParent instead of the viewport.',
       tags: ['strategy', 'absolute', 'offsetParent'],
+    },
+    {
+      file: '13-content-measurement.vue',
+      title: 'Content measurement — animated tooltips and truncation',
+      blurb:
+        'A tooltip, not a menu: wrapping text whose height is decided by the width the directive writes, and a closed state that collapses the box. The verdict is the same either way.',
+      tags: ['contentHeight', 'data-teleport-truncated', 'data-teleport-state', 'placement'],
+    },
+    {
+      file: '14-vshow-order.vue',
+      title: 'v-show before or after the directive',
+      blurb:
+        "Directives run in source order, so writing v-show second means the host is display: none when the directive measures it. Both columns must reach the same verdict — the README's own order is the left one.",
+      tags: ['v-show', 'directive order', 'data-teleport-fit', 'boundary'],
     },
   ],
 }

@@ -17,9 +17,10 @@ const rows = [
 ]
 
 /**
- * Read in the template, so moving the radio re-renders and the directive's
- * `updated` hook re-resolves the option. A flag the template never reads would
- * flip silently.
+ * A `computed` config object: a new plain object each time `scope` changes, so
+ * the re-render re-resolves the option. Plain objects are config — the
+ * directive reads them and writes nothing back, so throwing one away per render
+ * costs nothing.
  */
 const cfg = computed(() => ({ sink: log.value, rich: true, dedupe: { scope: scope.value } }))
 </script>

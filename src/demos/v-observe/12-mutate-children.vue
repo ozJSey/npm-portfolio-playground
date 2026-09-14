@@ -44,9 +44,9 @@ function onMutate(e: MutateEvent) {
   <pre class="pg-log" style="margin-top: 0.5rem">{{ log.join('\n') || '— add or remove a child —' }}</pre>
   <p class="pg-muted">
     With the filter on, adding a <code>.note</code> produces nothing. <code>match</code> also takes
-    an array; an invalid selector in that array is skipped rather than thrown, and the valid
-    siblings still apply. Text nodes never appear in <code>added</code> / <code>removed</code> —
-    element nodes only.
+    an array; an unparseable selector throws at bind time, naming it, because a typo that is
+    silently skipped leaves the mode filtering everything out and looking dead. Text nodes never
+    appear in <code>added</code> / <code>removed</code> — element nodes only.
   </p>
 </template>
 

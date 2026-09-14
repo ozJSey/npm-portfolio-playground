@@ -49,12 +49,48 @@ const entryFor = (library: LibraryLocation) =>
   TARGET === 'dist'
     ? (library.dist ?? `dist/${library.entry.replace('.ts', '.min.js')}`)
     : library.entry
+/**
+ * `PLAYGROUND_UNALIAS=v-teleport-to,v-observe` — resolve those to the installed
+ * npm package instead of the sibling source.
+ *
+ * Added as a workaround when `src/libraries.ts` imported every library at module
+ * scope, so **one package whose source did not parse took the whole app down**,
+ * every tab with it. That part is fixed: since PG-22 each library loads through
+ * its own `import()` and a broken one renders an error card on its own tab while
+ * the other nine keep working.
+ *
+ * This stays, because it answers the case the isolation does not: when the
+ * package you need to verify *is* the broken one, or when a sibling is being
+ * rewritten right now and you want the last published build under your tab
+ * instead of a moving target. Several agents edit sibling packages here at once,
+ * so that is routine rather than exceptional. Name the package, verify yours,
+ * and leave its source exactly as you found it.
+ *
+ * It is deliberately not the default. A tab silently reading the last published
+ * build instead of the working tree is precisely the rot the source aliases
+ * exist to prevent, so it has to be asked for by name, per run — and the server
+ * logs which packages it applied to, so a run can never be quietly reading one.
+ */
+const UNALIASED = new Set(
+  (process.env.PLAYGROUND_UNALIAS ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean),
+)
 const LIBRARY_ALIASES = Object.entries(LIBRARIES)
-  .filter(([, library]) => !process.env.GITHUB_ACTIONS && existsSync(pkg(`../${library.dir}`)))
+  .filter(
+    ([, library]) =>
+      !process.env.GITHUB_ACTIONS &&
+      !UNALIASED.has(library.dir) &&
+      existsSync(pkg(`../${library.dir}`)),
+  )
   .map(([specifier, library]) => ({
   find: new RegExp(`^${specifier.replace('/', '\\/')}$`),
   replacement: pkg(`../${library.dir}/${entryFor(library)}`),
   }))
+if (UNALIASED.size) {
+  console.log(`[playground] resolving from node_modules, not source: ${[...UNALIASED].join(', ')}`)
+}
 
 /**
  * Upload endpoints for the `v-dropzone` tab. XHR progress events only fire

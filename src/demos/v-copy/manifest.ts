@@ -1,13 +1,15 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-copy',
+  id: 'v-copy',
+  pkg: '@ozjsey/v-copy',
   tagline:
     'Make any element copyable. Click a <li>, a <code>, a table cell — its text is on the clipboard. Plus copy history, a "Copied!" state, keyboard + screen-reader support, and an automatic clipboard fallback, all from one binding.',
-  status: '1.1.0 — renamed to @ozjsey/v-copy, ready to publish (the unscoped name is squatted)',
+  status: '1.2.0 local — npm has 1.1.0 (verified 2026-09-14); 1.1.1 and 1.2.0 are staged, unpublished. The unscoped name is squatted.',
   notes: [
     'The Clipboard API needs a secure context. localhost counts, so real copies work here — paste somewhere to confirm.',
-    'History and controller state only stay observable when the bound object is a ref/reactive; an inline literal is re-created every render.',
+    'Card 16 is the one with a browser-only hazard behind it: pressing a non-interactive trigger collapses the document selection BEFORE the click handler runs (measured — a <button> keeps it, a <span> does not), so `.selection` captures it on pointerdown instead of reading it late.',
+    'An object binding has two roles. A mutable `reactive()` object is a CONTROLLER: the directive owns it, writes copy/clear/copied/history/last into it, and follows its config half live. Everything else — a plain literal, a frozen object, a `readonly()` view — is config the directive only reads. Card 5 shows both.',
   ],
   demos: [
     {
@@ -38,8 +40,9 @@ const manifest: LibraryManifest = {
     {
       file: '05-controller.vue',
       title: 'Controller — slot-like state without a composable',
-      blurb: 'Bind a reactive object: read copied / history / last, call copy() and clear().',
-      tags: ['CopyController', 'copy()', 'clear()', 'reactive'],
+      blurb:
+        'Bind a reactive object: read copied / history / last, call copy() and clear(). Its config half is live — a timer writes ctrl.disabled with nothing re-rendering. A frozen config on the second element shows the other role.',
+      tags: ['CopyController', 'copy()', 'clear()', 'reactive', 'Object.freeze'],
     },
     {
       file: '06-feedback.vue',
@@ -107,6 +110,20 @@ const manifest: LibraryManifest = {
       blurb:
         'dedupe compares text, not labels: two columns holding the same address collapse and the newest label wins. Flip to scope: \'key\' for a row each.',
       tags: ['dedupe', 'scope', 'v-copy:[key]', '.rich'],
+    },
+    {
+      file: '16-user-selection.vue',
+      title: "Copy what the USER selected",
+      blurb:
+        'Drag across the sentence, then press either trigger. The <span> is the interesting one: pressing it destroys the selection before the click handler runs, so the directive snapshots it on pointerdown. Shift+Arrow in the field or the note works too.',
+      tags: ['.selection', 'getSelection()', 'pointerdown capture', "error: 'empty'"],
+    },
+    {
+      file: '17-selection-scope.vue',
+      title: 'Whose selection is it — scoping with within',
+      blurb:
+        "Default is the whole document, like ⌘C. within: '.card' makes a card's copy button refuse a neighbour's highlight; within: true scopes to the bound element.",
+      tags: ['selection.within', 'closest()', 'scoped copy', 'v-copy:[key]'],
     },
   ],
 }

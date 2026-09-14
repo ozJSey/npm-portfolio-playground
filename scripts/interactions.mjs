@@ -26,15 +26,26 @@
  * itself — see the Coverage section below.
  */
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { Cdp, launchChrome, newPage } from './lib/cdp.mjs'
+import { Cdp, CdpCommandError, launchChrome, newPage, throughReload } from './lib/cdp.mjs'
+import { waitForBoot } from './lib/boot.mjs'
+import { readManifests } from './lib/manifests.mjs'
+import { freePort, resolvePort } from './lib/port.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
-const PORT = Number(process.env.PORT ?? 5212)
+/**
+ * A free port unless `PORT` pins one — and `PORT` is exported into the
+ * environment below, before the specs are imported, because three of them read
+ * it at module scope to build their own origin (upload endpoints, clipboard
+ * permission grants). 5212 was the old default and collided with everything;
+ * see `scripts/lib/port.mjs` for why a different magic number is not the fix.
+ */
+const PORT = await resolvePort('Pass a different PORT, or unset it to get a free one automatically.')
+process.env.PORT = String(PORT)
 const BASE = `http://localhost:${PORT}`
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY, 'i') : null
 const TARGET = process.env.PLAYGROUND_TARGET === 'dist' ? 'dist' : 'source'
@@ -119,46 +130,17 @@ if (!specs.length) {
 // The denominator has to come from the demo manifests, not from the spec
 // files, or the run grades its own homework: with two specs on disk the old
 // footer read "74/74 interaction checks passed" while five of the seven
-// libraries had never been driven at all. `src/registry.ts` builds the same
-// set with `import.meta.glob`, which Node cannot do — so read the directory
-// and pull the two fields that matter out of each manifest, loudly.
+// libraries had never been driven at all. `scripts/lib/manifests.mjs` does the
+// reading — shared with `smoke.mjs`, which needs the same denominator for the
+// same reason (PG-18).
 // ---------------------------------------------------------------------------
 const DEMOS_DIR = join(ROOT, 'src/demos')
 const BASELINE_PATH = join(HERE, 'interactions-coverage.json')
 
-/** Strip comments so a commented-out `file:` entry cannot inflate the count. */
-const decomment = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
-
-/** `[{ id, demos: ['01-basic.vue', …] }]`, in the app's order. Throws on anything odd. */
-function readManifests() {
-  const dirs = readdirSync(DEMOS_DIR)
-    .filter((d) => statSync(join(DEMOS_DIR, d)).isDirectory())
-    .sort()
-  if (!dirs.length) throw new Error(`No demo folders under ${DEMOS_DIR}`)
-
-  return dirs.map((dir) => {
-    const path = join(DEMOS_DIR, dir, 'manifest.ts')
-    if (!existsSync(path)) throw new Error(`${dir}/ has no manifest.ts`)
-    const src = decomment(readFileSync(path, 'utf8'))
-
-    const id = src.match(/\bid:\s*'([^']+)'/)?.[1]
-    if (!id) throw new Error(`Could not parse \`id\` out of ${dir}/manifest.ts`)
-    if (id !== dir) throw new Error(`${dir}/manifest.ts declares id '${id}' — folder and id must match`)
-
-    const demos = [...src.matchAll(/\bfile:\s*'([^']+\.vue)'/g)].map((m) => m[1])
-    if (!demos.length) throw new Error(`No \`file:\` entries in ${dir}/manifest.ts`)
-
-    // The app drops manifest entries with no file on disk (`missingDemoFiles`),
-    // so those are not cards and must not sit in the denominator. `smoke` is
-    // what fails on them; here they are only reported.
-    const missing = demos.filter((f) => !existsSync(join(DEMOS_DIR, dir, f)))
-    return { id, demos: demos.filter((f) => !missing.includes(f)), missing }
-  })
-}
-
 let manifests
+let manifestlessDirs
 try {
-  manifests = readManifests()
+  ;({ manifests, manifestlessDirs } = readManifests(DEMOS_DIR))
 } catch (err) {
   console.error(`\nCoverage: could not read the demo manifests — ${err.message}`)
   console.error('Fix the manifest rather than letting the run report a made-up denominator.')
@@ -224,6 +206,7 @@ let serverLog = ''
 server.stdout.on('data', (c) => (serverLog += c))
 server.stderr.on('data', (c) => (serverLog += c))
 
+let reloadsSeen = 0
 const results = []
 const record = (demo, name, pass, detail) => {
   results.push({ demo, name, pass, detail })
@@ -240,25 +223,38 @@ try {
     if (i === 79) throw new Error(`Dev server never came up:\n${serverLog}`)
   }
 
-  chrome = await launchChrome({ port: Number(process.env.CDP_PORT ?? 9335) })
+  chrome = await launchChrome({ port: Number(process.env.CDP_PORT) || (await freePort()) })
   cdp = await Cdp.connect(chrome.wsUrl)
   const page = await newPage(cdp, BASE)
+
+  // One thing to wait on. `waitForBoot` distinguishes "the page has not finished
+  // booting" from "a package failed to load" — they used to produce the same
+  // abort, which is the defect class this whole pass is about.
+  const boot = await waitForBoot(page, { serverLog })
+
+  // PG-22. One package that did not load no longer blanks every tab — it
+  // renders an error card on its own. Which means this runner has to look, or
+  // it would drive nine libraries, pass, and never mention the tenth.
+  for (const failure of boot.libraryFailures) {
+    record('(library)', failure.specifier, false,
+      `${failure.message} — every card on the ${failure.dir} tab is an error card. ` +
+        `Fix the package, or re-run with PLAYGROUND_UNALIAS=${failure.dir}.`)
+  }
 
   // PG-14. Demos are compiled in the browser. When that compiler is not the
   // runtime's own version, a directive inside a `v-for` never receives
   // `updated`, so every option-reactivity check below would be driving an inert
   // control — and passing, because the control it read back is the card's own
   // rendered text. Assert it before a single check runs.
-  const boot = await page.evaluate('window.__PLAYGROUND_VERSIONS__ ?? null')
-  if (!boot) throw new Error('The playground did not boot — window.__PLAYGROUND_VERSIONS__ is unset.')
-  if (!boot.matches) {
+  if (!boot.versions.matches) {
     throw new Error(
-      `SFC compiler ${boot.compiler} but Vue runtime ${boot.runtime}. See src/sfc/versions.ts.`,
+      `SFC compiler ${boot.versions.compiler} but Vue runtime ${boot.versions.runtime}. ` +
+        `See src/sfc/versions.ts.`,
     )
   }
 
   console.log(`\nPlayground interaction checks — ${TARGET} target, ${BASE}`)
-  console.log(`Vue ${boot.runtime} — compiler and runtime agree (PG-14 guard)`)
+  console.log(`Vue ${boot.versions.runtime} — compiler and runtime agree (PG-14 guard)`)
 
   // …and the same claim measured rather than inferred. Matching versions is the
   // known cause; a directive inside a `v-for` receiving `updated` is the
@@ -311,13 +307,71 @@ try {
       await sleep(2200)
       await page.evaluate(BASE_PRELUDE)
       if (spec.prelude) await page.evaluate(spec.prelude)
+      // A token that dies with the document. A reload landing between the
+      // prelude and the check leaves the page alive and the helpers gone, so the
+      // check fails with `ReferenceError: __obs is not defined` — true, useless,
+      // and indistinguishable from a spec bug. Comparing the token afterwards is
+      // what turns that into "the page reloaded", which is retryable.
+      const token = `run-${load}-${Math.random().toString(36).slice(2)}`
+      await page.evaluate(`window.__pgRun = ${JSON.stringify(token)}; 'ok'`)
+      return token
     }
+
+    /**
+     * PG-21. Vite full-reloads the page whenever an aliased sibling source
+     * changes, and with several agents editing siblings at once that is the
+     * normal condition here. The reload used to hang the run forever; the CDP
+     * client now fails the command instead, and this re-mounts and drives the
+     * check again rather than reporting a failure that says more about the
+     * neighbours than about the code. A reload on every attempt is reported,
+     * because at that point the tree really is too hot to measure.
+     */
+    const drive = (check, run) =>
+      throughReload(
+        async () => {
+          const token = await fresh()
+          let out
+          let thrown
+          try {
+            out = await run()
+          } catch (err) {
+            thrown = err
+          }
+          // Only consulted when the check did NOT pass.
+          //
+          // A failing check on a page that reloaded is almost always the reload
+          // — `ReferenceError: __obs is not defined` is what a lost prelude
+          // looks like, and it reads exactly like a spec bug. But some checks
+          // navigate on purpose (v-observe's `roprobe` card reloads with a query
+          // string), so a token mismatch cannot be treated as a fault on its
+          // own. Asking only about failures fixes the confusing case without
+          // second-guessing a check that worked.
+          const suspect = !!thrown || !out?.pass
+          const alive = suspect ? await page.evaluate('window.__pgRun ?? null') : token
+          if (alive !== token) {
+            throw new CdpCommandError({
+              method: `check "${check.name}"`,
+              elapsedMs: 0,
+              reason: 'navigated',
+              detail:
+                'the check did not pass AND the document it was given is gone, so the helpers it ' +
+                'needs went with it — this is a reload, not a result',
+            })
+          }
+          if (thrown) throw thrown
+          return out
+        },
+        {
+          attempts: 3,
+          onRetry: () =>
+            console.log(`      (a page reload interrupted "${check.name}" — re-mounting and retrying)`),
+        },
+      )
 
     for (const check of spec.checks ?? []) {
       if (ONLY && !ONLY.test(`${check.demo} ${check.name}`)) continue
-      await fresh()
       try {
-        const out = await page.evaluate(`(${check.fn.toString()})()`)
+        const out = await drive(check, () => page.evaluate(`(${check.fn.toString()})()`))
         record(check.demo, check.name, !!out?.pass, out?.detail ?? 'no detail')
       } catch (err) {
         record(check.demo, check.name, false, `threw: ${err.message.split('\n')[0]}`)
@@ -329,9 +383,8 @@ try {
     // to be filesystem-backed for `webkitGetAsEntry` to resolve.
     for (const check of spec.nativeChecks ?? []) {
       if (ONLY && !ONLY.test(`${check.demo} ${check.name}`)) continue
-      await fresh()
       try {
-        const out = await check.run({ page, cdp, sessionId: page.sessionId })
+        const out = await drive(check, () => check.run({ page, cdp, sessionId: page.sessionId }))
         record(check.demo, check.name, !!out?.pass, out?.detail ?? 'no detail')
       } catch (err) {
         record(check.demo, check.name, false, `threw: ${err.message.split('\n')[0]}`)
@@ -340,6 +393,10 @@ try {
   }
 
   for (const err of page.pageErrors) record('(page)', 'uncaught exception', false, err.split('\n')[0])
+  // A contamination meter. `fresh()` navigates once per check, so anything much
+  // above that is Vite reloading under the run — worth knowing before trusting
+  // a marginal result (PG-21).
+  reloadsSeen = cdp.navigations.length
 } catch (err) {
   record('(runner)', 'boot', false, err instanceof Error ? err.message : String(err))
 } finally {
@@ -351,6 +408,15 @@ try {
 
 const failed = results.filter((r) => !r.pass)
 console.log(`\n${results.length - failed.length}/${results.length} interaction checks passed.`)
+// `fresh()` navigates once per check, plus the boot load and the PG-14 probe.
+// Anything beyond that is Vite reloading under the run.
+if (reloadsSeen > results.length + 10) {
+  console.log(
+    `\nNOTE: the page navigated ${reloadsSeen} times for ${results.length} checks. Anything much above ` +
+      `one per check is Vite full-reloading because an aliased sibling source changed while the run ` +
+      `was going — the results above are from a moving target. See PG-21, and PLAYGROUND_UNALIAS.`,
+  )
+}
 if (failed.length) {
   console.log('\nFAILURES:')
   for (const f of failed) console.log(`  ${f.demo} — ${f.name}\n      ${f.detail}`)
@@ -375,6 +441,9 @@ for (const c of coverage) {
   console.log(`  ${tag}  ${c.id.padEnd(20)} ${String(c.covered.length).padStart(2)}/${String(c.total).padEnd(2)} cards${note}`)
   if (c.uncovered.length) for (const line of wrap(c.uncovered, '               untested: ')) console.log(line)
   if (c.missing.length) console.log(`               MANIFEST ENTRY WITH NO FILE: ${c.missing.join(' ')}`)
+}
+if (manifestlessDirs.length) {
+  console.log(`\n  NO TAB YET — src/demos/ folder with no manifest.ts: ${manifestlessDirs.join(' ')}`)
 }
 if (unknownDemoRefs.length) {
   console.log(`\n  SPEC BUG — checks aimed at demos that no manifest lists: ${unknownDemoRefs.join(' ')}`)

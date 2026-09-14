@@ -29,7 +29,12 @@ function onUpdate(e: Event) {
 
   <div class="frame" :style="{ width: `${width}px` }">
     <div class="items" v-fit-children="{ data: items, offsetNeededInPx: 44 }" @fit-children-updated="onUpdate">
-      <span v-for="item in items" :key="item" class="pg-chip">{{ item }}</span>
+      <!-- Keyed by POSITION on purpose. "Grow the first child" then rewrites the
+           text of an element that keeps its identity, which is the only trigger
+           a MutationObserver and the `updated` hook both miss. Key by value and
+           Vue replaces the element instead, and the card silently demonstrates
+           the `updated` hook twice. -->
+      <span v-for="(item, index) in items" :key="index" class="pg-chip">{{ item }}</span>
     </div>
   </div>
 
@@ -47,10 +52,13 @@ function onUpdate(e: Event) {
   <p class="pg-muted">
     Additions and removals come from Vue itself — the directive's <code>updated</code> hook, which
     the renderer queues after the patch and before the browser paints. A <code>MutationObserver</code>
-    stays on as the net for children injected outside Vue. <strong>Grow the first child</strong>
-    changes a child's <em>content</em>, which is neither of those; a per-child
-    <code>ResizeObserver</code> is what catches it. No <code>requestAnimationFrame</code> anywhere,
-    so nothing is ever painted mid-recalculation.
+    stays on as the net for children injected outside Vue. <strong>Grow the first child</strong> is
+    neither: the element keeps its identity and only its text changes, so the child set looks
+    untouched and the per-child <code>ResizeObserver</code> is the only thing that can report it. No
+    <code>requestAnimationFrame</code> anywhere, so nothing is ever painted mid-recalculation.
+    <br /><br />
+    <strong>Add</strong> and <strong>Remove</strong> use <code>push</code> and <code>pop</code> on
+    the same array: the payload below has to follow them even when the visible chips do not move.
   </p>
 </template>
 

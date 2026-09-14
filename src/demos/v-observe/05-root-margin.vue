@@ -48,7 +48,10 @@ function onPlain(e: IntersectEvent) {
 
   <p class="pg-muted">
     <code>root</code> is the scroll box, not the viewport, so this stays reproducible regardless of
-    where the page is scrolled.
+    where the page is scrolled — and dragging the slider rebuilds the observer, because
+    <code>rootMargin</code> cannot be changed on a live one. Before 0.2.0 both were read once at
+    mount, when the template ref was still <code>null</code>: this card observed the viewport and
+    the slider did nothing.
   </p>
 </template>
 

@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@ozjsey/bigdecimal-string':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@ozjsey/dependency-grouper':
+        specifier: ^0.3.5
+        version: 0.3.5
       '@ozjsey/v-copy':
         specifier: ^1.1.0
         version: 1.1.0(vue@3.5.41(typescript@5.9.3))
@@ -20,18 +26,21 @@ importers:
       '@ozjsey/v-keyboard-navigation':
         specifier: ^0.1.0
         version: 0.1.0(vue@3.5.41(typescript@5.9.3))
-      v-observe:
+      '@ozjsey/v-observe':
         specifier: ^0.1.0
         version: 0.1.0(vue@3.5.41(typescript@5.9.3))
-      v-scroll-into-view:
+      '@ozjsey/v-scroll-into-view':
         specifier: ^1.2.0
         version: 1.2.0(vue@3.5.41(typescript@5.9.3))
-      v-select-text:
+      '@ozjsey/v-select-text':
         specifier: ^2.1.0
         version: 2.1.0(vue@3.5.41(typescript@5.9.3))
-      v-teleport-to:
+      '@ozjsey/v-teleport-to':
         specifier: ^3.0.0
         version: 3.0.0(vue@3.5.41(typescript@5.9.3))
+      '@ozjsey/vue-write-behind':
+        specifier: ^0.1.0
+        version: 0.1.0(vue@3.5.41(typescript@5.9.3))
       vue:
         specifier: ^3.5.13
         version: 3.5.41(typescript@5.9.3)
@@ -77,7 +86,7 @@ importers:
         version: 26.2.0
       '@vitejs/plugin-vue':
         specifier: ^5.2.1
-        version: 5.2.4(vite@6.4.3(@types/node@26.2.0))(vue@3.5.41(typescript@5.9.3))
+        version: 5.2.4(vite@6.4.3(@types/node@26.2.0)(yaml@2.9.1))(vue@3.5.41(typescript@5.9.3))
       codemirror:
         specifier: ^6.0.1
         version: 6.0.2
@@ -89,7 +98,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.0.0
-        version: 6.4.3(@types/node@26.2.0)
+        version: 6.4.3(@types/node@26.2.0)(yaml@2.9.1)
       vue-tsc:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
@@ -345,6 +354,14 @@ packages:
     cpu: [x64]
     os: [linux]
 
+  '@ozjsey/bigdecimal-string@1.1.0':
+    resolution: {integrity: sha512-2dHEo0jxpX38d7ZuSvQsVY8T3Xc/81r6GifnmselCoNhCJ2kB0BKMCsEb3QUZo1Kf/NfIjJ3cDcOJ900Reg7OQ==}
+
+  '@ozjsey/dependency-grouper@0.3.5':
+    resolution: {integrity: sha512-z4WAfS8rNKmFZaq940sUKSaFfnKgmjsgaiujxDcudR9XwUn5gj8NokEV0aKqK9I/vugjA+Qoc6XEEnIlUvawOQ==}
+    engines: {node: '>=16.0.0'}
+    hasBin: true
+
   '@ozjsey/v-copy@1.1.0':
     resolution: {integrity: sha512-MDBd7nQatEJRpfMD3+JN78FFxvDM1/k/aRDPGnf3kja+taHrMJ8DLiUj5YjBVXYhn4GEGUxbuDPWaasE0ub4nw==}
     peerDependencies:
@@ -362,6 +379,31 @@ packages:
 
   '@ozjsey/v-keyboard-navigation@0.1.0':
     resolution: {integrity: sha512-KyrnBGcCimGENJqCOTOEjc+sa4b5dxu+3b4eudZO3Y2qx0iRlnohYgRXKr7Q7/BMMJkaf38h2WhqBW3QbaMN/g==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-observe@0.1.0':
+    resolution: {integrity: sha512-J48Mu5T24axBtR4b6r2BoT6O8RCg53rWF0livscgBBVwNzxYedezXClwoIulXRGhluSaLDDjJWZ5UaZoBaxbmw==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-scroll-into-view@1.2.0':
+    resolution: {integrity: sha512-lXL4UEgujzQxHxMyMf9nYTwRTDUIJC2w3ReyZg2bnhCeBjyjcDiMYLMQGvXEFfeakT98jVu/4dokEyWLv3SHzw==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-select-text@2.1.0':
+    resolution: {integrity: sha512-8NVGa4qRCuMr4llGFFkpClEPsQqEHo5etHLjHNp/gjL7bf7btdc4DfxoiDi2myU6Fx367hjNVxORIMukZbTznA==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/v-teleport-to@3.0.0':
+    resolution: {integrity: sha512-TcOxbosI+GGP/nmykUFu+fduDUY2d83q5Y8U3Icsqqo5gTCENwoKqun3zbRwjtSKdVxXYOfUg5INvqxDurIWXg==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@ozjsey/vue-write-behind@0.1.0':
+    resolution: {integrity: sha512-7l+12wyFUCnwy4+XKLoqHUhf4/TyvCvx8uywdPLVn7CTBpmoSIEIL5b5lnnSIgv+lheOWvEd+OSsi2PwlnaYEw==}
     peerDependencies:
       vue: ^3.0.0
 
@@ -578,6 +620,14 @@ packages:
   de-indent@1.0.2:
     resolution: {integrity: sha512-e/1zu3xH5MQryN2zdVaF0OrdNLUbvWxzMbi+iNA6Bky7l1RoP8a2fIbRocyHclXt/arDrrR6lL3TqFD9pMQTsg==}
 
+  detect-indent@7.0.2:
+    resolution: {integrity: sha512-y+8xyqdGLL+6sh0tVeHcfP/QDd8gUgbasolJJpY7NgeQGSZ739bDtSiaiDgtoicy+mtYB81dKLxO9xRhCyIB3A==}
+    engines: {node: '>=12.20'}
+
+  detect-newline@4.0.1:
+    resolution: {integrity: sha512-qE3Veg1YXzGHQhlA6jzebZN2qVf6NX+A7m7qlhCGG30dJixrAQhYOsJjsnBjJkCSmuOPpCk30145fr8FV0bzog==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
   entities@7.0.1:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
     engines: {node: '>=0.12'}
@@ -604,9 +654,20 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  get-stdin@9.0.0:
+    resolution: {integrity: sha512-dVKBjfWisLAicarI2Sf+JuBE/DghV4UzNAVe9yhEJuzeREd3JhOTE9cUaJTeSa77fsbQUK3pcOpJfM59+VKZaA==}
+    engines: {node: '>=12'}
+
+  git-hooks-list@3.2.0:
+    resolution: {integrity: sha512-ZHG9a1gEhUMX1TvGrLdyWb9kDopCBbTnI8z4JgRMYxsijWipgjSEYoPWqBuIB0DnRnvqlQSEeVmzpeuPm7NdFQ==}
+
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
+
+  is-plain-obj@4.1.0:
+    resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
+    engines: {node: '>=12'}
 
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
@@ -656,6 +717,18 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  semver@7.8.5:
+    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  sort-object-keys@1.1.3:
+    resolution: {integrity: sha512-855pvK+VkU7PaKYPc+Jjnmt4EzejQHyhhF33q31qG8x7maDzkeFhAAThdCYay11CISO+qAMwjOBP+fPZe0IPyg==}
+
+  sort-package-json@2.15.1:
+    resolution: {integrity: sha512-9x9+o8krTT2saA9liI4BljNjwAbvUnWf11Wq+i/iZt8nl2UGYnf3TH5uBydE7VALmP7AGwlfszuEeL8BDyb0YA==}
+    hasBin: true
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -689,26 +762,6 @@ packages:
 
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
-
-  v-observe@0.1.0:
-    resolution: {integrity: sha512-yCYQ+UaDohykq/8dXdaQ1O2bDYikKNNz78lh1Ev8+DojHmq/dXwvWr26lUu9exxb32eZ26VD7nGgiRQmAuMQuQ==}
-    peerDependencies:
-      vue: ^3.0.0
-
-  v-scroll-into-view@1.2.0:
-    resolution: {integrity: sha512-HoRPbuhV+ckDrWIRw+2f9XExqjeg47hjjbymEcqzIPCKdfxSXMr3cZTQkdVhRpXytRFklDa/JMrW3588dpFnjA==}
-    peerDependencies:
-      vue: ^3.0.0
-
-  v-select-text@2.1.0:
-    resolution: {integrity: sha512-uC6Kq+jve2KYkyc/jNTOpZX5IrPCC2jokNMYAmidb/M3kQIHEc1WyzW5z/WJtdcmbGEUWAA8dUlOKQjurDL8dg==}
-    peerDependencies:
-      vue: ^3.0.0
-
-  v-teleport-to@3.0.0:
-    resolution: {integrity: sha512-1Uyxuiol+GXHU1m5abouHo9zPyMmPNQ8Gx1p5u5WGLLE6rsH9zqcGuO7C0sMMNp4zVI9DlCBHH9qUfsHrIiNsw==}
-    peerDependencies:
-      vue: ^3.0.0
 
   vite@6.4.3:
     resolution: {integrity: sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==}
@@ -769,6 +822,11 @@ packages:
 
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
+
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
 snapshots:
 
@@ -1002,6 +1060,13 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
+  '@ozjsey/bigdecimal-string@1.1.0': {}
+
+  '@ozjsey/dependency-grouper@0.3.5':
+    dependencies:
+      sort-package-json: 2.15.1
+      yaml: 2.9.1
+
   '@ozjsey/v-copy@1.1.0(vue@3.5.41(typescript@5.9.3))':
     dependencies:
       vue: 3.5.41(typescript@5.9.3)
@@ -1015,6 +1080,26 @@ snapshots:
       vue: 3.5.41(typescript@5.9.3)
 
   '@ozjsey/v-keyboard-navigation@0.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-observe@0.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-scroll-into-view@1.2.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-select-text@2.1.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/v-teleport-to@3.0.0(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.41(typescript@5.9.3)
+
+  '@ozjsey/vue-write-behind@0.1.0(vue@3.5.41(typescript@5.9.3))':
     dependencies:
       vue: 3.5.41(typescript@5.9.3)
 
@@ -1099,9 +1184,9 @@ snapshots:
     dependencies:
       undici-types: 8.3.0
 
-  '@vitejs/plugin-vue@5.2.4(vite@6.4.3(@types/node@26.2.0))(vue@3.5.41(typescript@5.9.3))':
+  '@vitejs/plugin-vue@5.2.4(vite@6.4.3(@types/node@26.2.0)(yaml@2.9.1))(vue@3.5.41(typescript@5.9.3))':
     dependencies:
-      vite: 6.4.3(@types/node@26.2.0)
+      vite: 6.4.3(@types/node@26.2.0)(yaml@2.9.1)
       vue: 3.5.41(typescript@5.9.3)
 
   '@volar/language-core@2.4.15':
@@ -1216,6 +1301,10 @@ snapshots:
 
   de-indent@1.0.2: {}
 
+  detect-indent@7.0.2: {}
+
+  detect-newline@4.0.1: {}
+
   entities@7.0.1: {}
 
   esbuild@0.25.12:
@@ -1256,7 +1345,13 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
+  get-stdin@9.0.0: {}
+
+  git-hooks-list@3.2.0: {}
+
   he@1.2.0: {}
+
+  is-plain-obj@4.1.0: {}
 
   lines-and-columns@1.2.4: {}
 
@@ -1326,6 +1421,21 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.62.4
       fsevents: 2.3.3
 
+  semver@7.8.5: {}
+
+  sort-object-keys@1.1.3: {}
+
+  sort-package-json@2.15.1:
+    dependencies:
+      detect-indent: 7.0.2
+      detect-newline: 4.0.1
+      get-stdin: 9.0.0
+      git-hooks-list: 3.2.0
+      is-plain-obj: 4.1.0
+      semver: 7.8.5
+      sort-object-keys: 1.1.3
+      tinyglobby: 0.2.17
+
   source-map-js@1.2.1: {}
 
   style-mod@4.1.3: {}
@@ -1359,23 +1469,7 @@ snapshots:
 
   undici-types@8.3.0: {}
 
-  v-observe@0.1.0(vue@3.5.41(typescript@5.9.3)):
-    dependencies:
-      vue: 3.5.41(typescript@5.9.3)
-
-  v-scroll-into-view@1.2.0(vue@3.5.41(typescript@5.9.3)):
-    dependencies:
-      vue: 3.5.41(typescript@5.9.3)
-
-  v-select-text@2.1.0(vue@3.5.41(typescript@5.9.3)):
-    dependencies:
-      vue: 3.5.41(typescript@5.9.3)
-
-  v-teleport-to@3.0.0(vue@3.5.41(typescript@5.9.3)):
-    dependencies:
-      vue: 3.5.41(typescript@5.9.3)
-
-  vite@6.4.3(@types/node@26.2.0):
+  vite@6.4.3(@types/node@26.2.0)(yaml@2.9.1):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.5)
@@ -1386,6 +1480,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.2.0
       fsevents: 2.3.3
+      yaml: 2.9.1
 
   vscode-uri@3.1.0: {}
 
@@ -1406,3 +1501,5 @@ snapshots:
       typescript: 5.9.3
 
   w3c-keyname@2.2.8: {}
+
+  yaml@2.9.1: {}

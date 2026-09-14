@@ -30,20 +30,27 @@ function add() {
   seq.value += 1
   rows.value = [...rows.value, `Item ${seq.value}`]
 }
-function removeFocused() {
+/**
+ * Rows are identified by `data-row`, never by their rendered text. The text
+ * gains " (disabled)" the moment a row is disabled, so a text lookup could
+ * find a row on the way in and never find it again on the way out — which is
+ * exactly how the re-enable half of the toggle below used to be unreachable.
+ */
+function focusedRow(): string | null {
   const active = document.activeElement
-  if (!(active instanceof HTMLElement)) return
-  const text = (active.textContent || '').trim()
-  rows.value = rows.value.filter((r) => r !== text)
+  return active instanceof HTMLElement ? active.getAttribute('data-row') : null
+}
+
+function removeFocused() {
+  const row = focusedRow()
+  if (row) rows.value = rows.value.filter((r) => r !== row)
 }
 function shuffle() {
   rows.value = [...rows.value].reverse()
 }
 function toggleDisabledFocused() {
-  const active = document.activeElement
-  if (!(active instanceof HTMLElement)) return
-  const row = (active.textContent || '').trim()
-  if (!rows.value.includes(row)) return
+  const row = focusedRow()
+  if (!row || !rows.value.includes(row)) return
   disabled.value = disabled.value.includes(row)
     ? disabled.value.filter((r) => r !== row)
     : [...disabled.value, row]
@@ -67,15 +74,15 @@ function refill() {
   <div class="pg-row" style="margin-bottom: 0.6rem">
     <button class="pg-btn" @click="add">Add</button>
     <button class="pg-btn" @click="removeFocused">Remove focused</button>
-    <button class="pg-btn" @click="toggleDisabledFocused">Disable focused</button>
+    <button class="pg-btn" @click="toggleDisabledFocused">Toggle disabled on focused</button>
     <button class="pg-btn" @click="shuffle">Reverse</button>
     <button class="pg-btn" @click="clear">Remove all</button>
     <button class="pg-btn pg-btn--primary" @click="refill">Refill</button>
   </div>
 
   <div ref="host" class="list" role="listbox" aria-label="Dynamic rows" v-keyboard-navigation>
-    <div v-for="row in rows" :key="row" role="option" class="row" :aria-selected="false"
-      :aria-disabled="disabled.includes(row) ? 'true' : undefined">
+    <div v-for="row in rows" :key="row" role="option" class="row" :data-row="row"
+      :aria-selected="false" :aria-disabled="disabled.includes(row) ? 'true' : undefined">
       {{ row }}{{ disabled.includes(row) ? ' (disabled)' : '' }}
     </div>
     <p v-if="!rows.length" class="empty">no rows — press Refill</p>
@@ -85,11 +92,19 @@ function refill() {
 
   <p class="pg-muted">
     Removing the focused row moves focus to the row that took its place, instead of dropping it on
-    <code>&lt;body&gt;</code>. Disabling the tabbable row hands its <code>tabindex</code> back and
-    promotes another — otherwise you would end up with two tab stops, one of them on a control the
-    user was just told is unavailable. None of this is driven by Vue's <code>updated</code> hook:
-    it is a <code>MutationObserver</code>, because the DOM changes that break the invariant are
-    often not Vue's.
+    <code>&lt;body&gt;</code>. Disabling the tabbable row promotes another and pins the disabled one
+    at <code>tabindex="-1"</code> — otherwise you would end up with two tab stops, one of them on a
+    control the user was just told is unavailable. None of this is driven by Vue's
+    <code>updated</code> hook: it is a <code>MutationObserver</code>, because the DOM changes that
+    break the invariant are often not Vue's.
+  </p>
+  <p class="pg-muted">
+    This host is a <code>role="listbox"</code>, which defaults to
+    <code>skipDisabled: true</code> — so a disabled row leaves the arrow order and picks up
+    <code>data-keyboard-navigation-item="skipped"</code>. It stays clickable at
+    <code>tabindex="-1"</code>, which is what makes the toggle above work in both directions: click
+    a struck-through row and press the button again to bring it back. Card 14 has the rest of the
+    skipping model, including the roles that keep their disabled items.
   </p>
 </template>
 
@@ -113,6 +128,9 @@ function refill() {
 }
 .row[aria-disabled='true'] {
   opacity: 0.45;
+}
+.row[data-keyboard-navigation-item='skipped'] {
+  text-decoration: line-through;
 }
 .row:focus-visible {
   outline: 2px solid #4f46e5;

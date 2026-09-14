@@ -1,7 +1,8 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-select-text',
+  id: 'v-select-text',
+  pkg: '@ozjsey/v-select-text',
   tagline:
     'Reactive text selection for any element — select a paragraph, a range across nested markup, or the part that matches a pattern, on a false → true transition or on click. Inputs, textareas and contenteditable come along for the ride.',
   status: 'v2.1.0 local — copy-on-select landed, first publish pending',

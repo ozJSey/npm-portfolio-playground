@@ -14,9 +14,22 @@ import type { Component } from 'vue'
 import type { Demo } from '../registry'
 import { compileSfc, createStyleHandle, releaseStyles } from '../sfc-runtime'
 import { loadEdit, saveEdit, clearEdit } from '../storage'
+import { cardHref, cardUrl } from '../card-link'
 import CodeEditor from './CodeEditor.vue'
 
-const props = defineProps<{ demo: Demo; initialEditorOpen?: boolean }>()
+const props = defineProps<{
+  demo: Demo
+  /** The tab this card is on — half of its deep link. */
+  libraryId: string
+  /**
+   * A `#<library-id>/<card>` link asked for this card (DOCS-4). Marked rather
+   * than isolated: the neighbours stay on screen, because a reader arriving
+   * from a README paragraph usually wants the surrounding examples too. The
+   * `data-deep-linked` attribute is what `scripts/deeplinks.mjs` asserts on.
+   */
+  deepLinked?: boolean
+  initialEditorOpen?: boolean
+}>()
 const emit = defineEmits<{ dirty: [demoId: string, dirty: boolean] }>()
 
 const source = ref(loadEdit(props.demo.id) ?? props.demo.source)
@@ -35,10 +48,15 @@ const isDirty = computed(() => source.value !== props.demo.source)
  * Every package an import inside this card can resolve to: the tab's own
  * library, plus anything the manifest declares in `uses`. Hardcoding the tab
  * alone was simply false on a cross-library card.
+ *
+ * These are printed as `../<folder>/`, so they are on-disk folder names — the
+ * scope has to come off anything `uses` names by its npm specifier, or the hint
+ * points at `../@ozjsey/v-teleport-to/`, which is not a path that exists.
  */
+const folderOf = (specifier: string) => specifier.replace(/^@[^/]+\//, '')
 const importPaths = computed(() => [
   props.demo.id.slice(0, props.demo.id.indexOf('/')),
-  ...(props.demo.uses ?? []),
+  ...(props.demo.uses ?? []).map(folderOf),
 ])
 
 let debounce: ReturnType<typeof setTimeout> | undefined
@@ -112,10 +130,29 @@ compile()
 </script>
 
 <template>
-  <section :id="`demo-${demo.file}`" class="demo">
+  <section
+    :id="`demo-${demo.file}`"
+    class="demo"
+    :class="{ 'is-deep-linked': deepLinked }"
+    :data-deep-linked="deepLinked ? 'true' : undefined"
+    :data-card="demo.slug"
+  >
     <header class="demo__head">
       <div>
-        <h3 class="demo__title">{{ demo.title }}</h3>
+        <h3 class="demo__title">
+          <!--
+            The permalink navigates in-app, but its tooltip is the *published*
+            URL — the absolute form a README needs — so the person writing one
+            can read it off the page instead of assembling it from the filename
+            and hoping the slug rule is what they remember.
+          -->
+          <a
+            class="demo__permalink"
+            :href="cardHref(libraryId, demo.file)"
+            :title="`Link to this card — ${cardUrl(libraryId, demo.file)}`"
+            >#</a
+          >{{ demo.title }}
+        </h3>
         <p class="demo__blurb">{{ demo.blurb }}</p>
         <div class="demo__tags">
           <span v-for="tag in demo.tags" :key="tag" class="demo__tag">{{ tag }}</span>
@@ -125,6 +162,9 @@ compile()
         </div>
       </div>
       <div class="demo__actions">
+        <span v-if="deepLinked" class="demo__linked" title="You followed a link to this card">
+          linked
+        </span>
         <span v-if="isDirty" class="demo__dirty" title="Local edit, saved in this browser">
           edited
         </span>

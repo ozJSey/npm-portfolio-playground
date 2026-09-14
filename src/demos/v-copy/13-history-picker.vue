@@ -39,11 +39,12 @@ const padded = 'ada@lovelace.dev\n'
 const compareMode = ref<DedupeCompare>('exact')
 
 /**
- * The knob. It reads AND writes `picker.dedupe`, and the template binds it —
- * that read is the whole mechanism: it is what re-runs this component's
- * render, which is what re-runs the directive's `updated` hook, which is what
- * re-resolves the option. A flag kept in a variable the template never reads
- * would flip silently and never take effect.
+ * The knob reads AND writes `picker.dedupe`. Writing to a controller is enough
+ * on its own since 1.1.1 — the directive subscribes to the controller's config
+ * half, so the option re-resolves immediately whether or not anything
+ * re-renders. (Before that it took effect only when some unrelated binding
+ * happened to re-render the host, which is why this comment used to insist the
+ * template had to read the flag.)
  */
 const dedupeOn = computed<boolean>({
   get: () => picker.dedupe !== false,
@@ -77,8 +78,11 @@ const rows = computed(() => {
  * Every row carries its OWN `v-copy` binding rather than calling
  * `picker.copy(entry.text)`: `ctrl.copy()` runs on the last-mounted driver, so
  * the `[data-copied]` flash would land on an unrelated chip. Writing into the
- * same sink is also what promotes the picked entry back to index 0.
+ * same sink is also what promotes the picked entry back to index 0 — and what
+ * keeps `picker.last` current, since `last` mirrors the head of the array
+ * rather than whoever copied.
  *
+ * A plain object literal: config the directive only reads, never a controller.
  * Re-created on every render on purpose — that is what re-reads `picker.dedupe`
  * and `picker.max` after you move a control.
  */
@@ -121,6 +125,12 @@ function clearAll() {
 }
 
 const mark = (text: string) => text.replace(/\n/g, '↵')
+
+/** `last` mirrors the head of the sink, whichever binding wrote it. */
+const lastText = computed(() => {
+  const entry = picker.last
+  return entry === undefined ? '—' : mark(typeof entry === 'string' ? entry : entry.text)
+})
 const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour12: false })
 </script>
 
@@ -171,6 +181,10 @@ const clock = (at: number) => new Date(at).toLocaleTimeString([], { hour12: fals
       <span class="pg-chip">
         oldest kept {{ rows.length ? mark(rows[rows.length - 1].entry.text) : '—' }}
       </span>
+      <!-- `last` mirrors the HEAD of the history, whoever wrote it — the chips
+           bind the controller, the dropdown rows bind a plain config object
+           pointed at the same sink, and both keep this current. -->
+      <span class="pg-chip last">last {{ lastText }}</span>
     </div>
 
     <p class="pg-muted" style="margin: 0.9rem 0 0.4rem">3 · every attempt, deduped or not</p>

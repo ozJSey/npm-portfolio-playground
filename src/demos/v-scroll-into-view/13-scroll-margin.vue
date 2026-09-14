@@ -2,18 +2,25 @@
 import { ref, useTemplateRef } from 'vue'
 import type { VScrollIntoViewOptions } from '@ozjsey/v-scroll-into-view'
 
-const mirror = ref(false)
+/** none → the CSS rule stands · 0 → override it away · 80 → override it up. */
+const override = ref<'none' | 'zero' | 'eighty'>('none')
 const go = ref(false)
 const nativeOut = ref('—')
 const containerOut = ref('—')
+const verdict = ref('—')
 
 const natPane = useTemplateRef<HTMLElement>('natPane')
 const natTarget = useTemplateRef<HTMLElement>('natTarget')
 const conPane = useTemplateRef<HTMLElement>('conPane')
 const conTarget = useTemplateRef<HTMLElement>('conTarget')
 
+function offset(): { top: number } | undefined {
+  if (override.value === 'none') return undefined
+  return { top: override.value === 'zero' ? 0 : 80 }
+}
+
 function nativeOptions(): VScrollIntoViewOptions {
-  return { condition: go.value, block: 'start', behavior: 'instant' }
+  return { condition: go.value, block: 'start', behavior: 'instant', offset: offset() }
 }
 
 function containerOptions(): VScrollIntoViewOptions {
@@ -22,13 +29,16 @@ function containerOptions(): VScrollIntoViewOptions {
     container: conPane.value ?? undefined,
     block: 'start',
     behavior: 'instant',
-    offset: mirror.value ? { top: 40 } : undefined,
+    offset: offset(),
   }
 }
 
-function gap(pane: HTMLElement | null, target: HTMLElement | null): string {
-  if (!pane || !target) return '—'
-  return `gap above target: ${Math.round(target.getBoundingClientRect().top - pane.getBoundingClientRect().top)}px`
+/** Scrollport coordinates — the pane's own border is not a gap. */
+function gap(pane: HTMLElement | null, target: HTMLElement | null): number | null {
+  if (!pane || !target) return null
+  return Math.round(
+    target.getBoundingClientRect().top - pane.getBoundingClientRect().top - pane.clientTop,
+  )
 }
 
 function run(): void {
@@ -40,11 +50,15 @@ function run(): void {
   go.value = false
   nativeOut.value = 'scrolling…'
   containerOut.value = 'scrolling…'
+  verdict.value = 'scrolling…'
   requestAnimationFrame(() => {
     go.value = true
     window.setTimeout(() => {
-      nativeOut.value = gap(natPane.value, natTarget.value)
-      containerOut.value = gap(conPane.value, conTarget.value)
+      const n = gap(natPane.value, natTarget.value)
+      const c = gap(conPane.value, conTarget.value)
+      nativeOut.value = `gap above target: ${n}px`
+      containerOut.value = `gap above target: ${c}px`
+      verdict.value = n === c ? `Δ 0px — both paths agree at ${n}px` : `Δ ${(c ?? 0) - (n ?? 0)}px — NOT parity`
     }, 500)
   })
 }
@@ -53,8 +67,12 @@ function run(): void {
 <template>
   <div class="pg-row" style="margin-bottom: 0.6rem">
     <label class="pg-label">
-      <input v-model="mirror" type="checkbox" />
-      mirror it with <code>offset: { top: 40 }</code>
+      offset
+      <select v-model="override" class="pg-select">
+        <option value="none">not set — the CSS rule stands</option>
+        <option value="zero">{ top: 0 } — override the gap away</option>
+        <option value="eighty">{ top: 80 } — override it to 80px</option>
+      </select>
     </label>
     <button class="pg-btn pg-btn--primary" @click="run">Run both</button>
   </div>
@@ -85,14 +103,20 @@ function run(): void {
     </div>
   </div>
 
+  <p class="pg-kv verdict">{{ verdict }}</p>
+
   <p class="pg-muted">
-    Same markup, same <code>block: 'start'</code>, same stylesheet rule. The native path hands the
-    scroll to the browser, so the CSS <code>scroll-margin-top</code> opens its 40px gap; the
-    <code>container</code> path does the arithmetic itself against
-    <code>getBoundingClientRect()</code>, which does not include scroll margins, so the gap
-    disappears. A global <code>scroll-margin-top</code> for a sticky header therefore stops working
-    the moment you add <code>container</code> — tick the box to mirror it with the
-    <code>offset</code> option, which is how you get it back.
+    Same markup, same <code>block: 'start'</code>, same stylesheet rule — and since 1.3.0 the same
+    answer. The <code>container</code> path reads the target's computed
+    <code>scroll-margin</code> and the pane's <code>scroll-padding</code> instead of pretending
+    neither exists, so a global sticky-header rule keeps working the moment you add
+    <code>container</code>. It used to stop dead, and the only clue was the gap quietly closing.
+    <br /><br />
+    <code>offset</code> is now the <em>override</em> for that CSS, per side, on both paths — which is
+    why <code>{ top: 0 }</code> removes the gap rather than doing nothing, and why it removes it on
+    the native pane too: there it is written as an inline <code>scroll-margin-top: 0</code> across
+    the call and put back after. Being a leading-edge gap it lands where CSS puts one: fully on
+    <code>start</code>, half on <code>center</code>, and not at all on <code>end</code>.
   </p>
 </template>
 
@@ -105,6 +129,10 @@ function run(): void {
 .cap {
   margin: 0 0 0.25rem;
   color: #6b7488;
+}
+.verdict {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
 }
 .filler {
   margin: 0;

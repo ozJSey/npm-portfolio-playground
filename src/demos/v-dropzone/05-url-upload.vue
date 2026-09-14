@@ -9,6 +9,7 @@ const perFileFns = ref(false)
 const timeoutMs = ref(0)
 const withCredentials = ref(false)
 const rawText = ref(false)
+const tokenFails = ref(false)
 const progress = ref<Record<string, number>>({})
 const log = ref<string[]>([])
 
@@ -30,8 +31,12 @@ const options = computed(() => ({
     url: perFileFns.value ? (file: File) => `${endpoint.value}?name=${encodeURIComponent(file.name)}` : endpoint.value,
     method: method.value,
     // Headers are resolved per file too, so a token refresh between two files
-    // is picked up.
-    headers: () => ({ 'x-demo-token': `t_${Date.now().toString(36)}` }),
+    // is picked up. Which also means it can fail per file — tick "token refresh
+    // throws" and this callback throws the way an expired-session refresh does.
+    headers: () => {
+      if (tokenFails.value) throw new Error('token refresh failed')
+      return { 'x-demo-token': `t_${Date.now().toString(36)}` }
+    },
     fieldName: 'file',
     formDataExtras: perFileFns.value
       ? (file: File) => ({ folder: 'playground', originalName: file.name })
@@ -85,6 +90,9 @@ const options = computed(() => ({
     </label>
     <label class="pg-label"><input v-model="withCredentials" type="checkbox" /> withCredentials</label>
     <label class="pg-label"><input v-model="rawText" type="checkbox" /> custom parseResponse</label>
+    <label class="pg-label">
+      <input v-model="tokenFails" type="checkbox" /> token refresh throws
+    </label>
   </div>
 
   <div class="dz" v-dropzone="options">
@@ -121,6 +129,17 @@ const options = computed(() => ({
     <code>url</code> / <code>headers</code> / <code>formDataExtras</code> functions are resolved
     once, against the first file — so tick both boxes together only to see that trade-off, never in
     real code.
+  </p>
+
+  <p class="pg-muted">
+    <strong>token refresh throws</strong> makes the <code>headers</code> callback throw instead of
+    returning a token — the everyday production failure, since that callback is where an expired
+    session gets refreshed. The throw is reported as an ordinary upload failure: one
+    <code>onError</code> per affected file, the file lands in <code>api.failed</code> where
+    <code>retry()</code> can reach it, and the zone settles on <code>error</code>. Before 0.1.1 it
+    escaped as an uncaught exception from the drop listener: the zone spun forever on
+    <code>uploading</code>, no <code>onError</code> ever fired, and the files <em>after</em> the
+    throwing one in the same drop were never sent either.
   </p>
 
   <p class="pg-muted">

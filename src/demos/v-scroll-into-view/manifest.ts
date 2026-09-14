@@ -1,14 +1,16 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-scroll-into-view',
+  id: 'v-scroll-into-view',
+  pkg: '@ozjsey/v-scroll-into-view',
   tagline:
     'scrollIntoView() driven by a reactive condition — with edge detection, a pinned scroll container, and sticky-header offsets the native API leaves to you.',
-  status: 'v1.2.0 local — 272/272 tests across 5 workspaces, publish prep',
+  status: 'v1.3.0 local — 320/320 tests across 5 workspaces, publish prep',
   notes: [
     'Native scrollIntoView walks up to the nearest scrollable ancestor, which is usually the page. The container option is the whole point: it pins the scroller you actually meant.',
     'Every demo with a container scrolls inside its own box. The three cards that deliberately exercise the container-less native path (10, 12, 13) let the browser walk the ancestor chain, which moves the page too — that is the behaviour container exists to opt out of.',
     'The default behavior is smooth, except when the user has asked their OS for reduced motion: then it resolves to instant. An explicit behavior is always passed through untouched.',
+    'Since 1.3.0 the container path reads the target\'s CSS scroll-margin and the pane\'s scroll-padding, subtracts the container\'s border (clientTop/clientLeft), divides out any transform: scale() above it, and scrolls every scroller between the target and the pinned container. offset is the per-side override for scroll-margin on both paths. Card 15 is the sweep that holds all of that to the browser\'s own answer.',
   ],
   demos: [
     {
@@ -85,15 +87,15 @@ const manifest: LibraryManifest = {
       file: '12-nearest-oversized.vue',
       title: 'nearest when the target does not fit',
       blurb:
-        'Directive and native scrollIntoView side by side. Taller than the pane aligns the top, not the bottom; an offset that cannot fit is dropped rather than clipping the target.',
+        'Directive and native scrollIntoView side by side, with a Δ line rather than two readouts to subtract. A target taller than the pane aligns the edge you approach it from; an offset that cannot fit is dropped rather than clipping the target.',
       tags: ['block: nearest', 'native parity', 'offset'],
     },
     {
       file: '13-scroll-margin.vue',
-      title: 'CSS scroll-margin is a native-path feature',
+      title: 'CSS scroll-margin, and offset as its override',
       blurb:
-        'The same scroll-margin-top rule opens a gap without a container and is ignored with one. Tick the box to mirror it with offset.',
-      tags: ['scroll-margin', 'container', 'offset'],
+        'The same scroll-margin-top rule opens the same gap on both paths since 1.3.0. offset is the per-side override for it — including offset: { top: 0 }, which removes it.',
+      tags: ['scroll-margin', 'scroll-padding', 'container', 'offset'],
     },
     {
       file: '14-focus.vue',
@@ -101,6 +103,13 @@ const manifest: LibraryManifest = {
       blurb:
         'focus() makes the browser scroll first, and nearest then has nothing left to do — so the browser decides where you land. preventScroll hands it back.',
       tags: ['focus()', 'preventScroll', 'block: nearest'],
+    },
+    {
+      file: '15-parity-matrix.vue',
+      title: 'The container path against the browser, 192 ways',
+      blurb:
+        'A sweep, not a specimen: border × padding × target size × offset × block × approach, each measured against scrollIntoView on an identical pane. One number at the end.',
+      tags: ['native parity', 'container', 'border', 'scroll-margin'],
     },
   ],
 }

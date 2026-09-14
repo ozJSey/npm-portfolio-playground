@@ -15,6 +15,7 @@
  * fourth steps on the same Vue as the runtime. See that file for what happened
  * when they were not.
  */
+import type { BindingMetadata } from 'vue/compiler-sfc'
 import { compileScript, compileStyle, compileTemplate, parse } from 'vue/compiler-sfc'
 import { transform as sucraseTransform } from 'sucrase'
 import { rewriteModuleSyntax } from './esm-runtime'
@@ -26,6 +27,26 @@ export interface CompiledSfc {
   styles: string[]
   /** Non-fatal compiler tips. */
   warnings: string[]
+  /**
+   * `compileScript`'s view of what each top-level name in `<script setup>` is —
+   * `setup-ref`, `setup-const`, `props`, and so on. `undefined` when the block
+   * has no script at all.
+   *
+   * Returned rather than kept private because it is the only way to tell a
+   * template expression that reads a ref's value from one that reads `.value`
+   * off the already-unwrapped proxy. `src/doc-sample.ts` uses it for exactly
+   * that (`tickets/DOCS-3`; the defect is `tickets/DZ-5`, recipe 3, which
+   * shipped `Authorization: Bearer undefined` to anyone who pasted it).
+   */
+  bindings: BindingMetadata | undefined
+  /**
+   * The module-mode render function on its own, before `body` wraps it.
+   *
+   * `body` concatenates script and template, so a scan over it cannot tell a
+   * `_ctx.` reference the template compiler emitted from the same characters
+   * appearing in the sample's own script. The lints need the template half.
+   */
+  templateCode: string
 }
 
 /**
@@ -45,8 +66,15 @@ function scopeIdFor(filename: string): string {
 const messageOf = (e: unknown): string =>
   typeof e === 'string' ? e : e instanceof Error ? e.message : String(e)
 
-/** `compileScript` leaves TypeScript in its output; Vite hands that to esbuild. */
-function stripTypeScript(code: string, filename: string): string {
+/**
+ * `compileScript` leaves TypeScript in its output; Vite hands that to esbuild.
+ *
+ * Exported because a README's bare `ts` sample is not an SFC and has no script
+ * block to go through `compileScript` — but it is still TypeScript that has to
+ * parse, and it has to parse through *this* stripper, not a second one. See
+ * `src/doc-sample.ts`.
+ */
+export function stripTypeScript(code: string, filename: string): string {
   return sucraseTransform(code, {
     transforms: ['typescript'],
     // Only types come out — no downlevelling. The browser running this is the
@@ -80,7 +108,7 @@ export function compileSfcToFunctionBody(source: string, filename: string): Comp
 
   // --- script -------------------------------------------------------------
   let scriptCode = 'const __sfc__ = {};'
-  let bindings
+  let bindings: BindingMetadata | undefined
   if (descriptor.script || descriptor.scriptSetup) {
     const compiled = compileScript(descriptor, {
       id,
@@ -145,5 +173,5 @@ export function compileSfcToFunctionBody(source: string, filename: string): Comp
     .filter(Boolean)
     .join('\n')
 
-  return { body, styles, warnings }
+  return { body, styles, warnings, bindings, templateCode }
 }

@@ -38,10 +38,10 @@ function onUpdate(e: Event) {
   <p class="pg-muted">
     isOverflowing: <code>{{ overflowing }}</code> · hidden: <code>{{ hiddenCount }}</code
     >. A shrink-to-fit host feeds its own width back into the measurement — hide a chip and the host
-    reports a smaller box a moment later. The directive only lets a cached pass <em>confirm</em> the
-    current run; anything that would change it re-measures with every child shown first, which is
-    what stops that feedback becoming a collapse. Compare demo 5, where the host takes the whole row
-    and the badge is pinned right instead.
+    reports a smaller box a moment later. Every pass re-measures with every child shown first, so
+    what it reads is the real budget rather than the previous decision echoing back; that is what
+    stops the feedback becoming a collapse. Compare demo 5, where the host takes the whole row and
+    the badge is pinned right instead.
   </p>
 </template>
 

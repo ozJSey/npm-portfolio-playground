@@ -16,10 +16,31 @@
  *   B3  `nearest` + `offset` clipped 40px off a target the exact height of the
  *       pane, when showing all of it was available.
  *
+ * The three container-path divergences (SIV-4, found by the blind re-audit in
+ * the paths SIV-1 had just fixed — and by card 12, which was printing them):
+ *   S1  every container scroll was off by the container's BORDER width, because
+ *       the origin came from `getBoundingClientRect()` (border box) while
+ *       `scrollTop`/`clientHeight` are padding-box relative. Exactly 1px in
+ *       every pane here, which is why it survived a `<= 2` tolerance.
+ *   S2  `nearest` on a target taller than the pane approached from below
+ *       disagreed with native by a full pane height (229 vs 430).
+ *   S3  `offset.top` applied to `center` and `end` on the container path only;
+ *       the native path spells it `scroll-margin-top`, which CSS applies fully
+ *       to `start`, half to `center` and not at all to `end`.
+ *
  * Card 12 is the important shape here: the directive and native
  * `scrollIntoView` run on two identical panes, and the check compares them.
  * "Parity" asserted against a hard-coded number is a number someone chose;
  * asserted against the browser doing the same job beside it, it is a measurement.
+ *
+ * TOLERANCES. `<= 2` was the reason S1 shipped: the defect was 1px, on a demo
+ * whose readout was measured from the same wrong origin, so the buggy library
+ * value read as the rounder of the two. Parity checks here compare the two
+ * panes' `scrollTop` EXACTLY. A tolerance is only allowed where the quantity
+ * being measured is a laid-out box (card 06's alignment errors, card 04's
+ * sticky header), never where it is one integer against another integer the
+ * browser produced beside it. Card 15 sweeps the same comparison across 192
+ * geometries so no single hand-picked cell can be the whole proof.
  */
 
 const PRELUDE = `
@@ -209,12 +230,29 @@ const CHECKS = [
   },
 
   // -------------------------------------------------------------------------
-  // 12 — B2 and B3, measured against the browser's own scrollIntoView on an
-  // identical pane beside it.
+  // 12 — B2, B3 and SIV-4 S1/S2, measured against the browser's own
+  // scrollIntoView on an identical pane beside it. `scrollTop` is compared
+  // EXACTLY: both numbers come from the same browser on the same frame, and the
+  // defect this card was built to catch was one pixel wide.
   // -------------------------------------------------------------------------
   {
     demo: '12-nearest-oversized.vue',
-    name: 'B2 nearest: a target taller than the pane lands on the same pixel as native',
+    name: 'S1 the pane has a border, so a check that cannot see one pixel cannot see the defect',
+    fn: async () => {
+      const file = '12-nearest-oversized.vue'
+      const pane = __siv.pane(file)
+      return {
+        // Not a behaviour check — a check on the other checks. `clientTop` is
+        // the whole of S1, and if the demo ever loses its border every parity
+        // assertion below becomes vacuous while still passing.
+        pass: pane.clientTop >= 1,
+        detail: `pane clientTop=${pane.clientTop} (border width); the S1 error was exactly this many pixels`,
+      }
+    },
+  },
+  {
+    demo: '12-nearest-oversized.vue',
+    name: 'S1/B2 nearest, taller than the pane, from above: the SAME scrollTop as native, not one off',
     fn: async () => {
       const file = '12-nearest-oversized.vue'
       __siv.select(file, 'target height', 400)
@@ -227,9 +265,34 @@ const CHECKS = [
       const l = __siv.nums(lib)
       const n = __siv.nums(nat)
       return {
-        // [scrollTop, top, bottom]; the old code returned top -220 here.
-        pass: Math.abs(l[1] - n[1]) <= 2 && l[1] >= -2,
+        // [scrollTop, top, bottom]. Coming down to an oversized target aligns
+        // its top; the pre-1.3.0 code landed 1px past native on every row here.
+        pass: l[0] === n[0] && l[1] === 0,
         detail: `library "${lib}" vs native "${nat}"`,
+      }
+    },
+  },
+  {
+    demo: '12-nearest-oversized.vue',
+    name: 'S2 nearest, taller than the pane, from BELOW: native aligns the bottom, and so must we',
+    fn: async () => {
+      const file = '12-nearest-oversized.vue'
+      __siv.select(file, 'target height', 400)
+      __siv.select(file, 'approach from', 'below')
+      __siv.select(file, 'offset.top', 0)
+      await __siv.sleep(200)
+      __siv.button(file, 'Run both').click()
+      const lib = await __siv.settled(file, 'readout-library')
+      const nat = await __siv.settled(file, 'readout-native')
+      const l = __siv.nums(lib)
+      const n = __siv.nums(nat)
+      const pane = __siv.pane(file, 0)
+      return {
+        // The exact case the card is named after, and the one it got backwards:
+        // directive 229 against native 430, while the blurb asserted agreement.
+        // The target's BOTTOM edge lands on the scrollport's bottom edge.
+        pass: l[0] === n[0] && Math.abs(l[2] - pane.clientHeight) <= 1,
+        detail: `library "${lib}" vs native "${nat}", pane clientHeight ${pane.clientHeight}`,
       }
     },
   },
@@ -247,9 +310,9 @@ const CHECKS = [
       const l = __siv.nums(lib)
       const pane = __siv.pane(file, 0)
       return {
-        // top 0 / bottom 200 inside a 200px pane. The old code landed at
+        // top 0 / bottom 200 inside a 200px scrollport. The old code landed at
         // top 40 / bottom 240 — 40px of the target below the fold.
-        pass: Math.abs(l[1]) <= 2 && l[2] <= pane.clientHeight + 2,
+        pass: l[1] === 0 && l[2] <= pane.clientHeight,
         detail: `library "${lib}", pane clientHeight ${pane.clientHeight}`,
       }
     },
@@ -271,22 +334,71 @@ const CHECKS = [
       return {
         // Coming from below, `nearest` aligns the near edge — so the sticky
         // gap is visible: 40px, where native (which has no offset) gives 0.
-        pass: Math.abs(l[1] - 40) <= 2 && Math.abs(n[1]) <= 2,
+        pass: l[1] === 40 && n[1] === 0,
         detail: `library "${lib}" vs native "${nat}"`,
       }
     },
   },
 
   // -------------------------------------------------------------------------
-  // 13 — B5. Not a bug, a documented asymmetry, but one a consumer discovers by
-  // their sticky header eating a heading.
+  // 15 — the sweep. One hand-picked geometry is one hand-picked geometry; this
+  // is 192 of them, and it is the check that would have caught S1 on the day it
+  // was written. It takes ~20s, which is the price of not choosing the cell.
+  // -------------------------------------------------------------------------
+  {
+    demo: '15-parity-matrix.vue',
+    name: 'S1/S2/S3: 192 geometries, every one landing on native\'s pixel',
+    fn: async () => {
+      const file = '15-parity-matrix.vue'
+      __siv.button(file, 'Run the sweep').click()
+      const summary = await __siv.until(() => {
+        const t = __siv.out(file, 'summary')
+        return t && t !== '—' ? t : null
+      }, 120000, 500)
+      const failures = [...__siv.stage(file).querySelectorAll('.fails tbody tr')].map((tr) =>
+        [...tr.children].map((td) => __siv.txt(td)).join(' '),
+      )
+      return {
+        pass: !!summary && summary.indexOf('disagree') === -1 && failures.length === 0,
+        detail: `${summary ?? 'never finished'}${failures.length ? ' — ' + failures.slice(0, 4).join(' | ') : ''}`,
+      }
+    },
+  },
+  {
+    demo: '15-parity-matrix.vue',
+    name: 'sweep control: the border and padding columns are actually being varied',
+    fn: async () => {
+      const file = '15-parity-matrix.vue'
+      // A sweep that silently stopped sweeping would report a clean 192 rows
+      // forever. Drive one cell by hand and confirm the pane geometry responds.
+      const pane = __siv.stage(file).querySelector('.sweep')
+      const before = { top: pane.clientTop, h: pane.clientHeight }
+      __siv.button(file, 'Run the sweep').click()
+      const changed = await __siv.until(
+        () => (pane.clientTop !== before.top || pane.clientHeight !== before.h ? { t: pane.clientTop, h: pane.clientHeight } : null),
+        20000,
+        50,
+      )
+      await __siv.until(() => (__siv.out(file, 'summary') !== '—' ? true : null), 120000, 500)
+      return {
+        pass: !!changed,
+        detail: `pane started at clientTop ${before.top} / clientHeight ${before.h}` +
+          (changed ? `, observed ${changed.t} / ${changed.h} mid-sweep` : ', never changed'),
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 13 — SIV-2. The container path reads CSS `scroll-margin` / `scroll-padding`
+  // since 1.3.0, so this card no longer demonstrates a divergence; it
+  // demonstrates the convergence, and `offset` as the per-side override.
   // -------------------------------------------------------------------------
   {
     demo: '13-scroll-margin.vue',
-    name: 'B5: CSS scroll-margin-top is honoured on the native path and dropped with a container',
+    name: 'SIV-2: CSS scroll-margin-top opens the same gap on BOTH paths',
     fn: async () => {
       const file = '13-scroll-margin.vue'
-      __siv.checkbox(file, 'mirror it', false)
+      __siv.select(file, 'offset', 'none')
       await __siv.sleep(150)
       __siv.button(file, 'Run both').click()
       const nat = await __siv.settled(file, 'readout-native')
@@ -294,22 +406,40 @@ const CHECKS = [
       const n = __siv.nums(nat)[0]
       const c = __siv.nums(con)[0]
       return {
-        pass: Math.abs(n - 40) <= 2 && Math.abs(c) <= 2,
-        detail: `native gap ${n}px (expects 40), container gap ${c}px (expects 0)`,
+        pass: n === 40 && c === 40,
+        detail: `native gap ${n}px, container gap ${c}px — both expect 40`,
       }
     },
   },
   {
     demo: '13-scroll-margin.vue',
-    name: 'B5 workaround: offset { top: 40 } reproduces the CSS gap under a container',
+    name: 'offset { top: 0 } removes the CSS gap on both paths, rather than doing nothing',
     fn: async () => {
       const file = '13-scroll-margin.vue'
-      __siv.checkbox(file, 'mirror it', true)
+      __siv.select(file, 'offset', 'zero')
       await __siv.sleep(150)
       __siv.button(file, 'Run both').click()
+      const nat = await __siv.settled(file, 'readout-native')
       const con = await __siv.settled(file, 'readout-container')
+      const n = __siv.nums(nat)[0]
       const c = __siv.nums(con)[0]
-      return { pass: Math.abs(c - 40) <= 2, detail: `container gap ${c}px (expects 40)` }
+      return { pass: n === 0 && c === 0, detail: `native gap ${n}px, container gap ${c}px — both expect 0` }
+    },
+  },
+  {
+    demo: '13-scroll-margin.vue',
+    name: 'offset { top: 80 } overrides the CSS gap on both paths — it does not stack with it',
+    fn: async () => {
+      const file = '13-scroll-margin.vue'
+      __siv.select(file, 'offset', 'eighty')
+      await __siv.sleep(150)
+      __siv.button(file, 'Run both').click()
+      const nat = await __siv.settled(file, 'readout-native')
+      const con = await __siv.settled(file, 'readout-container')
+      const n = __siv.nums(nat)[0]
+      const c = __siv.nums(con)[0]
+      // 80, not 120: `offset` replaces `scroll-margin-top`, it is not added to it.
+      return { pass: n === 80 && c === 80, detail: `native gap ${n}px, container gap ${c}px — both expect 80` }
     },
   },
 
@@ -430,6 +560,143 @@ const CHECKS = [
     },
   },
 
+  {
+    demo: '06-alignment.vue',
+    name: 'S3: offset.top is a LEADING-edge gap — none of it reaches an end alignment',
+    fn: async () => {
+      const file = '06-alignment.vue'
+      const pane = __siv.stage(file).querySelector('#grid-pane')
+      const bottomGap = async (offset) => {
+        __siv.range(file, 'offset.top', offset)
+        await __siv.sleep(150)
+        __siv.button(file, 'Scroll').click()
+        await __siv.still(pane)
+        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const p = pane.getBoundingClientRect()
+        return t.bottom - (p.top + pane.clientTop + pane.clientHeight)
+      }
+      __siv.select(file, 'block', 'end')
+      const none = await bottomGap(0)
+      const sixty = await bottomGap(60)
+      return {
+        // `offset` is the same request as `scroll-margin-top`, and CSS does not
+        // apply that to an end alignment at all. The container path used to
+        // subtract it from every alignment, so a chat pane pinned with
+        // `block: 'end'` and a global offset rested 60px above the bottom while
+        // the native path rested on it.
+        pass: Math.abs(none) <= 2 && Math.abs(sixty - none) <= 2,
+        detail: `bottom gap with no offset ${none.toFixed(1)}px, with offset 60 ${sixty.toFixed(1)}px — they must be the same`,
+      }
+    },
+  },
+  {
+    demo: '06-alignment.vue',
+    name: 'S3: a centred alignment moves by HALF the offset, as a scroll-margin does',
+    fn: async () => {
+      const file = '06-alignment.vue'
+      const pane = __siv.stage(file).querySelector('#grid-pane')
+      const centreError = async (offset) => {
+        __siv.range(file, 'offset.top', offset)
+        await __siv.sleep(150)
+        __siv.button(file, 'Scroll').click()
+        await __siv.still(pane)
+        const t = __siv.stage(file).querySelector('.cell.target span').getBoundingClientRect()
+        const p = pane.getBoundingClientRect()
+        return t.top + t.height / 2 - (p.top + pane.clientTop + pane.clientHeight / 2)
+      }
+      __siv.select(file, 'block', 'center')
+      const none = await centreError(0)
+      const sixty = await centreError(60)
+      return {
+        // Growing the scroll box by 60 on its leading edge moves the box's
+        // centre up by 30, so the pane stops 30px earlier and the target comes
+        // to rest 30px BELOW the scrollport's centre — half the gap, visible
+        // above it. The pre-1.3.0 code moved it by the full 60.
+        pass: Math.abs(none) <= 2 && Math.abs(sixty - none - 30) <= 2,
+        detail: `centre error with no offset ${none.toFixed(1)}px, with offset 60 ${sixty.toFixed(1)}px (expects ${(none + 30).toFixed(1)}, i.e. half)`,
+      }
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 07 and 09 — two cards whose own prose was the finding. 07 showcased
+  // `cancel()` through a button that is disabled every time a human looks at
+  // it; 09 promised silence for a misconfigured `container`, which was the
+  // complaint rather than the feature.
+  // -------------------------------------------------------------------------
+  {
+    demo: '07-composable.vue',
+    name: 'cancel() actually cancels: the queued frame never moves the pane',
+    fn: async () => {
+      const file = '07-composable.vue'
+      const pane = __siv.pane(file)
+      __siv.button(file, 'scroll() then cancel()').click()
+      const text = await __siv.until(() => {
+        const t = __siv.out(file, 'readout')
+        return t && t !== '—' ? t : null
+      }, 6000)
+      return {
+        pass: !!text && text.indexOf('never ran') !== -1 && text.indexOf("state was 'pending'") !== -1,
+        detail: `readout "${text}", pane scrollTop ${pane.scrollTop}`,
+      }
+    },
+  },
+  {
+    demo: '07-composable.vue',
+    name: 'cancel() control: without it, the same scroll() does move the pane',
+    fn: async () => {
+      const file = '07-composable.vue'
+      const pane = __siv.pane(file)
+      pane.scrollTop = 0
+      __siv.button(file, 'scroll()').click()
+      await __siv.still(pane)
+      return { pass: pane.scrollTop > 100, detail: `pane scrollTop ${pane.scrollTop} after an uncancelled scroll()` }
+    },
+  },
+  {
+    demo: '09-resilience.vue',
+    name: 'a misconfigured container warns once per message instead of failing silently',
+    fn: async () => {
+      const file = '09-resilience.vue'
+      const seen = []
+      const original = console.warn
+      console.warn = (...args) => { seen.push(String(args[0])) ; original.apply(console, args) }
+      try {
+        __siv.button(file, 'Trigger every broken binding at once').click()
+        await __siv.sleep(600)
+      } finally {
+        console.warn = original
+      }
+      const mine = seen.filter((m) => m.indexOf('[v-scroll-into-view]') === 0)
+      return {
+        // Six broken bindings, all of them "resolved to null or detached", so
+        // the latch collapses them to one line — which is the point.
+        pass: mine.length === 1 && mine[0].indexOf('resolved to null') !== -1,
+        detail: `${mine.length} warning(s): ${mine.map((m) => m.slice(0, 60)).join(' | ') || 'none'}`,
+      }
+    },
+  },
+  {
+    demo: '09-resilience.vue',
+    name: 'and nothing throws, and no pane moves',
+    fn: async () => {
+      const file = '09-resilience.vue'
+      const before = [...document.querySelectorAll('.pg-scroller')].map((p) => p.scrollTop)
+      let threw = null
+      try {
+        __siv.button(file, 'Trigger every broken binding at once').click()
+        await __siv.sleep(600)
+      } catch (err) {
+        threw = err.message
+      }
+      const after = [...document.querySelectorAll('.pg-scroller')].map((p) => p.scrollTop)
+      return {
+        pass: !threw && before.join() === after.join(),
+        detail: threw ? `threw: ${threw}` : `${before.length} scrollers, all unmoved`,
+      }
+    },
+  },
+
   // -------------------------------------------------------------------------
   // 04 — the sticky-header offset in a `v-for`. PG-14 meant this card received
   // ZERO `updated` calls until 2026-09-06, so nothing about it was ever
@@ -528,7 +795,7 @@ const NATIVE_CHECKS = [
 ]
 
 export default {
-  library: '@ozjsey/v-scroll-into-view',
+  library: 'v-scroll-into-view',
   prelude: PRELUDE,
   checks: CHECKS,
   nativeChecks: NATIVE_CHECKS,

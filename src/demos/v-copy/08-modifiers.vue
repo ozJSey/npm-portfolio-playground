@@ -7,7 +7,9 @@ const linkClicks = ref(0)
 
 <template>
   <div class="pg-col">
-    <!-- .once — every listener detaches after the trigger fires once. -->
+    <!-- .once — every listener detaches after the trigger fires once, and stays
+         detached: a later re-render must not put the listeners, the tabindex or
+         the role="button" back on an element that no longer copies. -->
     <button class="pg-btn" v-copy.once="'copied exactly once'">
       .once — click twice, only the first copies
     </button>

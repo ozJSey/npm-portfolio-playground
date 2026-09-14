@@ -1,14 +1,18 @@
 import type { LibraryManifest } from '../../registry'
 
 const manifest: LibraryManifest = {
-  id: '@ozjsey/v-keyboard-navigation',
+  id: 'v-keyboard-navigation',
+  pkg: '@ozjsey/v-keyboard-navigation',
   tagline:
     'One tab stop for a group of controls — roving tabindex, arrows, typeahead, a real PageUp/PageDown, and the controlled scroll the browser gets wrong.',
-  status: 'v0.1.0 local, unpublished — 99 tests across 2 workspaces, 21 browser checks',
+  status: 'v0.3.0 local (0.1.0 on npm) — 200 tests across 2 workspaces, 39/39 mutants, 30 browser checks',
   notes: [
     'The wedge is card 04. Every roving-tabindex library leaves scrolling to the browser on purpose, and the browser centres the focused item — a five-row window lurches three rows at a time. focus({preventScroll:true}) then scrollIntoView({block:"nearest"}) follows one row at a time; in the other order it is a silent no-op.',
     'The directive never writes role or selection state. Every aria-selected / aria-checked you see on these cards is written by the demo, which is the point.',
     'Card 13 is a manual screen-reader walkthrough. Arrow keys never reach the handler in NVDA/JAWS browse mode, so keyboard testing alone cannot validate this library.',
+    'Card 15 is a regression card for the worst defect this package shipped: in 0.1.0 a bare container selector went through document.querySelector, so two instances of one component both scrolled the first one\'s pane. Tick the box on that card to watch the old behaviour, spelled out as a getter.',
+    'Card 14 is the skipping model: three piles, per-role defaults for aria-disabled, and the group that skips every item — which is the obvious way to break the one-tabbable invariant.',
+    'Cards 16 and 17 are hover-as-input (0.3.0). Card 16 carries the regression for the trap that makes it hard: arrowing scrolls the list, so the row under a stationary cursor changes and the browser fires a pointer event for it — react to that and the highlight snaps back to the mouse on every keystroke. The fix is to react to the cursor moving, not to the document moving. Card 17 is the case the focus rule exists for: hover must not blur the input you are typing in.',
   ],
   demos: [
     {
@@ -86,8 +90,32 @@ const manifest: LibraryManifest = {
     {
       file: '13-screen-reader.vue',
       title: 'Screen-reader walkthrough (manual)',
-      blurb: 'Three widgets and what to listen for. Browse mode is the case no keyboard test can reach.',
-      tags: ['NVDA', 'JAWS', 'VoiceOver', 'browse mode'],
+      blurb: 'Four widgets and what to listen for. Browse mode is the case no keyboard test can reach — including the skipped item it still finds.',
+      tags: ['NVDA', 'JAWS', 'VoiceOver', 'browse mode', 'skipped items'],
+    },
+    {
+      file: '14-skipping.vue',
+      title: 'Skipping — three piles, and the group that skips everything',
+      blurb: 'focusgroup="none" for a live control; aria-disabled per role; disable every row and watch the tab stop survive.',
+      tags: ['focusgroup="none"', 'skipDisabled', 'ROLE_DEFAULTS', 'data-keyboard-navigation-item="skipped"'],
+    },
+    {
+      file: '15-two-instances.vue',
+      title: 'Which box scrolls — two instances, one selector',
+      blurb: 'The 0.1.0 defect, with its negative control: a bare container selector resolved document-wide and the second list scrolled the first.',
+      tags: ['scroll', 'container', ':scope', 'regression'],
+    },
+    {
+      file: '16-hover.vue',
+      title: 'Hover as an input — and the scroll trap',
+      blurb: 'Arrow to row 3, hover row 7, press ↓, land on row 8. Then park the cursor and hold ↓: the highlight must not snap back.',
+      tags: ['hover', "reason: 'hover'", 'pointermove not mouseover', 'no scroll on hover'],
+    },
+    {
+      file: '17-combobox.vue',
+      title: 'Combobox — hover that never blurs the input',
+      blurb: 'Type, arrow the listbox, hover a row. Focus stays in the field the whole time — the reason hover never moves focus into a group.',
+      tags: ['activedescendant', 'hover', 'imperative api', 'focus never leaves the input'],
     },
   ],
 }

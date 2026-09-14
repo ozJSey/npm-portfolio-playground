@@ -35,8 +35,12 @@ function onEdit(e: MutateEvent) {
 
   <pre class="pg-log" style="margin-top: 0.5rem">{{ log.join('\n') || '— start typing —' }}</pre>
   <p class="pg-muted">
-    Text mode subscribes with <code>subtree: true</code>, so edits in nested nodes fire too. Several
-    character-data records in one observer batch collapse into a single event that keeps the
+    <code>from</code> and <code>to</code> are the host's whole <code>textContent</code>, not the
+    text node that happened to change — press Enter and this box becomes several text nodes, and a
+    per-node diff would make the validator judge one line. Text mode subscribes to
+    <code>characterData</code> with <code>subtree: true</code> <em>and</em> to
+    <code>childList</code>, because <code v-pre>{{ msg }}</code> compiles to
+    <code>el.textContent = …</code>. Several records in one batch collapse into one event with the
     original <code>from</code> and the latest <code>to</code>.
   </p>
 </template>

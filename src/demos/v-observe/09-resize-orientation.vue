@@ -31,8 +31,11 @@ function onFlip(e: ResizeEvent) {
 
   <pre class="pg-log" style="margin-top: 0.5rem">{{ log.join('\n') || '— resize to flip —' }}</pre>
   <p class="pg-muted">
-    Drag the box wider than tall and back. With tolerance at 0 the <code>square</code> state needs
-    an exact 1:1; widen the band and near-square sizes report <code>square</code> too.
+    The first event arrives at first paint with <code>from: null</code> — it is the only signal an
+    orientation consumer gets before anything is dragged. After that, drag the box wider than tall
+    and back. With tolerance at 0 the <code>square</code> state needs an exact 1:1; widen the band
+    and near-square sizes report <code>square</code> too. Hiding the box reports nothing at all: a
+    0×0 element is unmeasured, not square.
   </p>
 </template>
 

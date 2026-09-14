@@ -45,6 +45,9 @@ function onMutate(e: MutateEvent) {
   <p class="pg-muted">
     Switching the dropdown rebuilds the observer with the new init shape, live — no remount. Note
     that the class toggle also rewrites <code>style</code>, so <code>attr:*</code> reports both.
+    <code>data-observe-state</code> is never reported: the directive writes it, and
+    <code>setAttribute</code> queues a record even for an unchanged value, so feeding it back was an
+    unbounded loop — this dropdown froze the tab before 0.2.0.
   </p>
 </template>
 
