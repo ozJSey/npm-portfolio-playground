@@ -19,6 +19,13 @@ import type { CopyResult } from '@ozjsey/v-copy'
  */
 const picked = ref<string[]>([])
 
+/**
+ * Re-arming the `.once` trigger below. `.once` detaches for good — a new `key`
+ * mounts a fresh element, which is the only honest way to make the latch
+ * demonstrable twice in one page load.
+ */
+const arm = ref(0)
+
 const log = ref<string[]>([])
 function onResult(e: Event) {
   const r = (e as CustomEvent<CopyResult>).detail
@@ -57,6 +64,20 @@ function onResult(e: Event) {
       <button class="pg-btn" v-copy.selection="picked">Copy selection — a &lt;button&gt;</button>
       <span class="pg-btn chip" v-copy.selection="picked">Copy selection — a &lt;span&gt;</span>
       <span class="pg-muted">the span is where the selection would otherwise be lost</span>
+    </div>
+
+    <!-- `.selection` + `.once` on a <span>: the two halves pull against each
+         other. `.once` detaches every listener *inside* the click it is
+         latching, and the snapshot the press took is what this host has to copy
+         from — the live selection is already collapsed by then. The one copy
+         `.once` allows is therefore also the one that needs the snapshot to
+         still be there. -->
+    <div class="pg-row">
+      <span :key="arm" class="pg-btn latch" v-copy.selection.once="picked">
+        .selection.once — copies the first press, then latches
+      </span>
+      <button class="pg-btn ghost" @click="arm++">Re-arm (mounts a fresh element)</button>
+      <span class="pg-muted">press it twice: only the first press copies</span>
     </div>
 
     <p class="pg-muted">
@@ -99,8 +120,12 @@ function onResult(e: Event) {
   background: #fdf6f6;
   font-size: 0.82rem;
 }
-.chip {
+.chip,
+.latch {
   cursor: pointer;
+}
+.ghost {
+  font-size: 0.78rem;
 }
 .pg-btn[data-copied] {
   border-color: #16a34a;

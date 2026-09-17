@@ -5,7 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-keyboard-navigation',
   tagline:
     'One tab stop for a group of controls — roving tabindex, arrows, typeahead, a real PageUp/PageDown, and the controlled scroll the browser gets wrong.',
-  status: 'v0.3.0 local (0.1.0 on npm) — 200 tests across 2 workspaces, 39/39 mutants, 30 browser checks',
   notes: [
     'The wedge is card 04. Every roving-tabindex library leaves scrolling to the browser on purpose, and the browser centres the focused item — a five-row window lurches three rows at a time. focus({preventScroll:true}) then scrollIntoView({block:"nearest"}) follows one row at a time; in the other order it is a silent no-op.',
     'The directive never writes role or selection state. Every aria-selected / aria-checked you see on these cards is written by the demo, which is the point.',

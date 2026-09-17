@@ -49,8 +49,21 @@ export interface LibraryManifest {
   pkg: string
   /** One-sentence description of the restriction the library removes. */
   tagline: string
-  /** Publish state, mirrored from the root TASKS.md snapshot. */
-  status: string
+  /**
+   * There is deliberately no `status` field (DOCS-6).
+   *
+   * There was one, printed as a pill under the tagline, carrying release
+   * bookkeeping mirrored by hand from the root `TASKS.md`: which version is on
+   * npm, when somebody last checked the registry, what is built locally and not
+   * published. Measured against `npm view <pkg> version` on 2026-09-17, nine of
+   * the ten disagreed with the registry, and one advertised `v2.1.0` of a
+   * package whose registry has only 1.0.0 and 1.0.1. This page is read by
+   * strangers, for whom "2.3.1 built locally, not yet published" advertises
+   * something they cannot install — and the README rendered beside it already
+   * carries npm version badges that update themselves. A version number this
+   * app has to keep true is a maintenance burden that has already failed once;
+   * do not add it back.
+   */
   /** Anything worth knowing before poking at the demos. */
   notes?: string[]
   demos: DemoMeta[]

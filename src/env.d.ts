@@ -2,6 +2,14 @@
 
 /** Injected by vite.config.ts `define` — which alias target the server runs. */
 declare const __PLAYGROUND_TARGET__: 'src' | 'dist'
+/**
+ * Injected by vite.config.ts `define` — where the libraries on this page came
+ * from, in words fit to print. `__PLAYGROUND_TARGET__` answers a narrower
+ * question (which sibling entry an alias points at) and says nothing about
+ * whether any alias was installed, which is how the deployed site spent its
+ * life claiming to run sources it had never seen. See DOCS-6.
+ */
+declare const __PLAYGROUND_ORIGIN__: string
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'

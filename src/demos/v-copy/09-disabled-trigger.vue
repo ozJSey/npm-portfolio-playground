@@ -27,6 +27,17 @@ const programmatic = reactive<CopyController>({ trigger: false })
       trigger: 'dblclick' — double-click me
     </span>
 
+    <!-- A key-shaped trigger. Any key copies, so the Enter/Space handler the
+         directive normally adds for a non-interactive host is deliberately
+         skipped — the trigger listener is already on that key, and both would
+         copy twice for one press. What is NOT skipped is `tabindex` +
+         `role="button"`: an element that cannot take focus never receives a
+         `keydown` at all, so without them this binding is unreachable from the
+         one device it was configured for. Tab to it and press any key. -->
+    <span class="dbl keyed" v-copy="{ source: 'key-triggered', trigger: 'keydown' }">
+      trigger: 'keydown' — Tab here and press any key
+    </span>
+
     <!-- trigger: false = no listener at all; only the controller can fire it. -->
     <div class="pg-row">
       <span class="dbl" v-copy="programmatic">trigger: false — clicking does nothing</span>

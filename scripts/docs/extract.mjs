@@ -9,15 +9,32 @@
  *
  * The fence scanner mirrors `src/markdown.ts` on purpose — that renderer is
  * what the Documentation view runs, so a block this file sees and that file
- * does not (or the other way round) is itself a defect. The one intentional
- * difference is the info string: `src/markdown.ts` matches ```` ```(\w*) ````
- * and nothing else, so a fence carrying anything beyond a bare language word
- * does not render as code at all. That is why `classify.mjs` puts the
- * declaration *in the language word* rather than inventing a suffix syntax.
+ * does not (or the other way round) is itself a defect. It used to differ on
+ * the info string, and DOCS-6 showed what the difference cost: a fence this
+ * file read happily was a line `src/markdown.ts` matched with no rule at all,
+ * and the renderer looped on it until the tab was killed. Both now take three
+ * or more backticks or tildes, any info string, language = its first word.
  */
 
-/** ```` ```lang ```` — the opener. GFM allows any info string; we record it whole. */
-const FENCE_OPEN = /^(\s*)(`{3,}|~{3,})(.*)$/
+/**
+ * ```` ```lang ```` — the opener. GFM allows any info string; we record it whole.
+ *
+ * The prefix group takes blockquote markers as well as indentation, because a
+ * fence inside a `>` quote is still a fence — GFM, npm, GitHub and
+ * `src/markdown.ts` (which strips the markers and renders the quote
+ * recursively) all agree. Matching only leading whitespace made this file blind
+ * to them: `dependency-grouper`'s README has a ```` > ```console ```` block that
+ * the page renders as code and that this scanner read as six lines of prose —
+ * 23 blocks here against 24 on screen. That one is harmless (`console` is prose
+ * either way, and the package has no tab, so `scripts/docs.mjs` never compared
+ * them). The same blindness against a ```` > ```ts ```` sample is not: it would
+ * be a documented, compilable sample that no gate ever compiled. Found by
+ * `scripts/markdown.mjs`, which exists to hold these two parsers together.
+ *
+ * The prefix is stripped from the body exactly as the indent is, which is what
+ * keeps the extracted code byte-identical to the rendered code.
+ */
+const FENCE_OPEN = /^((?:\s*>)*\s*)(`{3,}|~{3,})(.*)$/
 const HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/
 
 /** GitHub's heading→anchor rule, which is what `#section` links in these files mean. */
@@ -57,7 +74,7 @@ export function extractReadme(text, { file }) {
       const startLine = i + 1
       const body = []
       i++
-      const close = new RegExp(`^\\s*${marker[0]}{${marker.length},}\\s*$`)
+      const close = new RegExp(`^(?:\\s*>)*\\s*${marker[0]}{${marker.length},}\\s*$`)
       let closed = false
       while (i < lines.length) {
         if (close.test(lines[i])) {

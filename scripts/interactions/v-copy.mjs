@@ -55,6 +55,7 @@ async function grant(ctx) {
 
 const clipboard = (ctx) => read(ctx, () => navigator.clipboard.readText())
 
+
 /** Text of the first `sel` inside a card's own stage — never the card chrome. */
 const stageText = (ctx, demo, sel) =>
   read(
@@ -486,6 +487,75 @@ const NATIVE_CHECKS = [
       }
     },
   },
+  {
+    demo: '09-disabled-trigger.vue',
+    name: "trigger: 'keydown' — the host is reachable by Tab, and a real key press copies",
+    async run(ctx) {
+      // The regression this exists for: the Enter/Space handler and the
+      // tabindex/role were gated on one condition, so a key-shaped trigger lost
+      // both. Skipping the handler is right (the trigger listener is already on
+      // that key); skipping the tab stop left a <span> no keyboard could reach,
+      // which is the only device a `keydown` trigger has. Focus is exactly the
+      // thing jsdom cannot settle, so it is settled here: a real tab order,
+      // walked with trusted Tab presses.
+      //
+      // The ONE check in this file that does not end at `navigator.clipboard
+      // .readText()`, and the exception is measured rather than casual. A read
+      // issued after this card's key-driven copy stalls the renderer itself —
+      // even an evaluate raced against a page-side `setTimeout` never comes
+      // back, so the harness dies on a 30s timeout and takes the rest of the
+      // run with it (six runs out of ten while this was written; a macOS
+      // pasteboard contended by another Chrome is the likeliest cause, and the
+      // click-driven checks below still read it back fine).
+      //
+      // `[data-copied]` is not the usual "it rendered something" consolation
+      // prize here: `execute.ts` calls `flagCopied` only after `runCopy`
+      // resolved `ok`, i.e. after `navigator.clipboard.writeText()` itself
+      // resolved. It is evidence the write happened, one step short of reading
+      // the bytes back — and the bytes are read back for this library by the
+      // eight clipboard checks that follow.
+      const D = '09-disabled-trigger.vue'
+      await grant(ctx)
+      const attrs = await read(
+        ctx,
+        (d) => {
+          const el = document.querySelector(`section[id="demo-${d}"] .demo__stage span.keyed`)
+          return { tabindex: el?.getAttribute('tabindex') ?? null, role: el?.getAttribute('role') ?? null }
+        },
+        D,
+      )
+
+      // Enter the card's tab order at its first control, then walk forward with
+      // trusted Tab presses — an element with no tab stop is simply never
+      // reached, which is the whole assertion.
+      await click(ctx, D, 'input[type="checkbox"]')
+      let where = await focused(ctx)
+      let tabs = 0
+      for (; tabs < 8 && !where.includes('keyed'); tabs++) {
+        await tab(ctx)
+        where = await focused(ctx)
+      }
+
+      // Before: the same host must NOT be copying already, or "it copied" below
+      // would pass on a stale flash rather than on this key press.
+      const before = await read(
+        ctx,
+        (d) => !!document.querySelector(`section[id="demo-${d}"] .demo__stage span.keyed[data-copied]`),
+        D,
+      )
+      await enter(ctx)
+      await sleep(220)
+      const flashed = await read(
+        ctx,
+        (d) => !!document.querySelector(`section[id="demo-${d}"] .demo__stage span.keyed[data-copied]`),
+        D,
+      )
+      return {
+        pass: attrs.tabindex === '0' && attrs.role === 'button' && where.includes('keyed') && !before && flashed,
+        detail: `tabindex=${JSON.stringify(attrs.tabindex)} role=${JSON.stringify(attrs.role)} focusAfter${tabs}Tabs=${where} copiedBefore=${before} copiedAfterEnter=${flashed}`,
+      }
+    },
+  },
   // -- COPY-5: the user's own selection --------------------------------------
   {
     demo: '16-user-selection.vue',
@@ -522,6 +592,57 @@ const NATIVE_CHECKS = [
       return {
         pass: dragged === 'first algorithm' && text === 'first algorithm' && flashed,
         detail: `sentinel=${sentinel} dragged=${JSON.stringify(dragged)} clipboard=${JSON.stringify(text)} data-copied=${flashed}`,
+      }
+    },
+  },
+  {
+    demo: '16-user-selection.vue',
+    name: '`.selection.once` on a <span> copies on the first press — the latch must not eat the snapshot',
+    async run(ctx) {
+      // The regression this exists for: `.once` detaches every listener INSIDE
+      // the click it is latching, and on a non-interactive host the snapshot
+      // taken on the press is the only text left by then — the live selection
+      // is already collapsed. A teardown that dropped the snapshot refused the
+      // single copy `.once` exists to make, and the failure is invisible from
+      // jsdom, which never collapses anything.
+      const sentinel = await prime(ctx, 'COPY5-SENTINEL-once')
+      const D = '16-user-selection.vue'
+
+      const dragged = await dragSelect(ctx, D, '.prose', 'first algorithm')
+      await click(ctx, D, 'span.latch')
+      const firstPress = await clipboard(ctx)
+
+      // Latched: a second press with a DIFFERENT selection must leave the
+      // clipboard exactly as the first press left it, and the injected a11y
+      // attributes must be gone with the listeners.
+      const dragged2 = await dragSelect(ctx, D, '.prose', 'Ada Lovelace')
+      await click(ctx, D, 'span.latch')
+      const secondPress = await clipboard(ctx)
+      const stripped = await read(
+        ctx,
+        (d) => {
+          const el = document.querySelector(`section[id="demo-${d}"] .demo__stage span.latch`)
+          return !el.hasAttribute('tabindex') && !el.hasAttribute('role')
+        },
+        D,
+      )
+
+      // Re-arm mounts a fresh element, so the latch is per-element and the
+      // card is not dead for the rest of the page load.
+      await click(ctx, D, 'button.ghost')
+      await dragSelect(ctx, D, '.prose', 'Ada Lovelace')
+      await click(ctx, D, 'span.latch')
+      const rearmed = await clipboard(ctx)
+
+      return {
+        pass:
+          dragged === 'first algorithm' &&
+          firstPress === 'first algorithm' &&
+          dragged2 === 'Ada Lovelace' &&
+          secondPress === 'first algorithm' &&
+          stripped &&
+          rearmed === 'Ada Lovelace',
+        detail: `sentinel=${sentinel} dragged=${JSON.stringify(dragged)} firstPress=${JSON.stringify(firstPress)} secondDrag=${JSON.stringify(dragged2)} secondPress=${JSON.stringify(secondPress)} a11yStripped=${stripped} afterReArm=${JSON.stringify(rearmed)}`,
       }
     },
   },

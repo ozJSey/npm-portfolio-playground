@@ -31,6 +31,13 @@ jobs:
       - run: pnpm refresh:npm
       - run: pnpm install --lockfile-only --ignore-scripts
       - run: pnpm install --frozen-lockfile
+      # DOCS-6 shipped to production through this workflow, which built and
+      # deployed with nothing checked at all. These two are the cheapest checks
+      # that would have stopped it: one renders every README without a browser,
+      # the other builds this repository alone and opens every documentation
+      # tab in one. Together about twenty seconds against a broken docs site.
+      - run: pnpm markdown
+      - run: pnpm docs:ci
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3
         with:

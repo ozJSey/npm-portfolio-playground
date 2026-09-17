@@ -19,7 +19,10 @@ artifacts consumers install.
 | `pnpm interactions` | Drives every card through CDP in a real Chrome and asserts on the resulting UI |
 | `pnpm geometry` | Measures the `v-fit-children` rows at three viewports — spill, clipping, over-hiding, and the event against the DOM |
 | `pnpm docs:check` | Checks the Documentation view: every package README rendered, its code samples compiled, its links resolved, its tarball packed |
-| `pnpm deeplinks` | Follows every `#<tab>/<card>` deep link in a real browser — all 142 cards, both separator forms, and every card link published in a sibling README |
+| `pnpm docs:ci` | Builds this repository **alone**, the way GitHub Actions does, and asserts every documentation tab renders the published README and that nothing widens the page at 1280px or 420px — the check DOCS-6 was missing |
+| `pnpm markdown` | Renders every README through `src/markdown.ts` in a child process on a deadline: it must terminate, and it must see the same fenced blocks `scripts/docs/extract.mjs` does |
+| `pnpm tabs` | Drives both tab strips with real key events — roving tabindex, arrows, Home/End, one tab stop, `aria-controls` wiring |
+| `pnpm deeplinks` | Follows every `#<tab>/<card>` deep link in a real browser — all 144 cards, both separator forms, and every card link published in a sibling README |
 | `pnpm typecheck` | `vue-tsc` over the playground **and** every demo SFC |
 | `pnpm typecheck:libs` | `tsc --noEmit` over each aliased sibling package, with its own tsconfig — ten seconds, no browser |
 | `pnpm build` | Static production build into `dist/` |
@@ -70,8 +73,11 @@ It is deliberately not the default: a tab quietly reading the last published bui
 working tree is exactly the rot the source aliases exist to prevent.
 
 **The instruments prove they can fail.** `pnpm docs:check` runs 19 deliberately broken samples through its
-own code paths before it checks anything (see below), and `pnpm deeplinks` rejects two deliberately
-wrong assertions before it follows a single real link. `geometry` has the same idea as an env var:
+own code paths before it checks anything (see below); `pnpm docs:ci --negative-control`,
+`pnpm docs:ci --probe-overflow`, `pnpm markdown --negative-control` and `pnpm tabs --negative-control`
+each put their own defect back and require the gate to go red; and `pnpm deeplinks` rejects two
+deliberately wrong assertions before it follows a single real link. `geometry` has the same idea as
+an env var:
 
 ```bash
 GEOMETRY_SELFTEST=empty-row      pnpm geometry   # hide every child of the first card's host
@@ -239,6 +245,17 @@ without being classified.
 
 **Adding a dependency.** Put it in the right group in `.dep-groups.yaml`, then `pnpm deps` (or just
 `pnpm install` — see the hook below) writes it into `package.json`, alphabetised.
+
+**Tailwind: allowed, and declined (DOCS-6, 2026-09-17).** The owner lifted the zero-dependency rule
+for the styling pass — *"You can use tailwind too"* — and it was not taken up. One reason decides
+it: **this app compiles `.vue` source the user types in the browser.** Tailwind generates its CSS by
+scanning source files at build time, and code that does not exist until someone edits a card in the
+live editor cannot be scanned. A demo where `class="p-4"` silently does nothing is exactly the class
+of quiet failure `src/libraries.ts` and `scripts/` exist to prevent. Behind that: every demo SFC and
+every harness script keys on the hand-written `.pg-*` and `.demo__*` classes, so adopting it means
+rewriting them or running both systems. The work DOCS-6 actually needed was a spacing scale and a
+reading measure — about forty lines in `src/styles.css`. The permission stands for a future pass
+that genuinely wants it; this was not that pass.
 
 **Changing a version.** Edit `package.json`, not the group file. `generate` syncs
 `package.json` → config *before* it merges config → `package.json`, so a version typed into

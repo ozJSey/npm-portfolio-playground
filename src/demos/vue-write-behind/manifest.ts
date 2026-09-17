@@ -5,8 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/vue-write-behind',
   tagline:
     'Write-behind cache for Vue 3 — one composable over a reactive record. Local state stays authoritative, the server’s reply is discarded on purpose, and a failed save never rolls back or drops what the user typed.',
-  status:
-    '0.2.0 local, 0.1.1 on npm as @ozjsey/vue-write-behind — publish pending. 0.2.0 moves the engine into @ozjsey/write-behind (unpublished) and adds the flush on pagehide plus the final flag a writer hangs keepalive off.',
   notes: [
     'Not a directive — one composable. There is nothing for the app to register: the demos import useWriteBehind directly, which is exactly how an app uses it.',
     'Every "server" on this tab is a plain async function with an artificial delay — that is the library’s real integration point (`write: (value, key) => Promise`), not a stand-in for one. No HTTP is involved, so the cards behave identically on the deployed static site and on your machine.',

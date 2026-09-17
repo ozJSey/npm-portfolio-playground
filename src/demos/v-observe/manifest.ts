@@ -5,7 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-observe',
   tagline:
     'IntersectionObserver + ResizeObserver + MutationObserver behind one binding — with scroll-direction inference, per-threshold crossings, breakpoint brackets, semantic mutation diffs, and a single data-observe-state CSS hook.',
-  status: 'v0.2.0 local — 241 unit tests, 19 browser checks, audit closed',
   notes: [
     'Every mode writes its own segment of data-observe-state ("intersect:…;resize:…;mutate:…"). A "-" means that mode is not configured on the binding; one segment never clobbers another.',
     'Scroll inside each demo box rather than the page — the intersect demos pass their own `root`, so the results do not depend on where the page is scrolled. That only works because `root`, `rootMargin` and `thresholds` rebuild the observer when they change: Vue evaluates the binding object during render, before template refs exist, so the first value of `root` is always null.',

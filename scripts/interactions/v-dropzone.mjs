@@ -848,6 +848,66 @@ const CHECKS = [
       return { pass: during === 'active' && after === 'error', detail: `error -> dragenter=${during} -> dragleave=${after}` }
     },
   },
+  /**
+   * DZ-5. `drop` fires for anything draggable, not just files — a text
+   * selection, a link, an image dragged off another page. The zero-file branch
+   * of `processFiles` used to write the literal `'idle'`, which reported a live
+   * upload as finished and dropped `progressBatch` with it, so the bar went to
+   * zero mid-upload and never came back. Only a real browser fires a `drop`
+   * whose DataTransfer carries no files at all through the real listener stack.
+   */
+  {
+    demo: '09-css-progress.vue',
+    name: 'an empty drop leaves a live upload running (DZ-5)',
+    fn: async () => {
+      const s = __dz.stage('09-css-progress.vue')
+      const z = __dz.zone('09-css-progress.vue')
+      __dz.set(s.querySelector('select'), '/api/upload-slow')
+      await __dz.sleep(200)
+      __dz.drop(z, [__dz.file('slow.bin', 'application/octet-stream', 512 * 1024)])
+      const live = await __dz.until(
+        () =>
+          z.getAttribute('data-dropzone') === 'uploading' &&
+          Number(z.style.getPropertyValue('--dropzone-files-pending') || '0') > 0,
+        9000,
+      )
+      if (!live) return { pass: false, detail: `never reached uploading; state=${z.getAttribute('data-dropzone')}` }
+      const before = z.style.getPropertyValue('--dropzone-progress')
+      // The user drags a text selection over the zone and lets go.
+      const empty = __dz.dt([])
+      __dz.fire(z, 'dragenter', empty)
+      __dz.fire(z, 'dragover', empty)
+      __dz.fire(z, 'drop', empty)
+      await __dz.sleep(400)
+      const state = z.getAttribute('data-dropzone')
+      const pending = z.style.getPropertyValue('--dropzone-files-pending')
+      const progress = z.style.getPropertyValue('--dropzone-progress')
+      return {
+        pass: state === 'uploading' && Number(pending || '0') > 0 && progress !== '',
+        detail: `progress before="${before}" → after the empty drop: state=${state} files-pending="${pending}" progress="${progress}"`,
+      }
+    },
+  },
+  {
+    demo: '10-state-machine.vue',
+    name: 'an empty drop leaves the sticky error standing (DZ-5)',
+    fn: async () => {
+      const s = __dz.stage('10-state-machine.vue')
+      const z = __dz.zone('10-state-machine.vue')
+      __dz.set(s.querySelector('select'), '/api/upload-fail')
+      await __dz.sleep(200)
+      __dz.drop(z, [__dz.file('boom.png', 'image/png')])
+      const err = await __dz.until(() => z.getAttribute('data-dropzone') === 'error', 9000)
+      if (!err) return { pass: false, detail: `never reached error; state=${z.getAttribute('data-dropzone')}` }
+      const empty = __dz.dt([])
+      __dz.fire(z, 'dragenter', empty)
+      __dz.fire(z, 'dragover', empty)
+      __dz.fire(z, 'drop', empty)
+      await __dz.sleep(400)
+      const after = z.getAttribute('data-dropzone')
+      return { pass: after === 'error', detail: `error -> empty drop -> ${after}` }
+    },
+  },
   {
     demo: '05-url-upload.vue',
     name: "method: 'PUT' is the verb actually sent",

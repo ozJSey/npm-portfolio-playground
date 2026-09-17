@@ -146,6 +146,7 @@ const FLIP = '02-placement-flip.vue'
 const COMPOSABLE = '11-composable.vue'
 const OVERFLOW = '05-overflow.vue'
 const VIRTUAL = '09-virtual-reference.vue'
+const ABSOLUTE = '12-strategy-absolute.vue'
 
 const CHECKS = [
   {
@@ -793,6 +794,74 @@ const CHECKS = [
         detail:
           `sweep: ${new Set(seen).size} distinct side(s) across 60 recalcs · ` +
           `settled: ${new Set(settled).size} distinct across 20 (${settled[0]})`,
+      }
+    },
+  },
+  {
+    demo: ABSOLUTE,
+    // `strategy: 'absolute'` resolves its coordinates against the host's
+    // offsetParent — and through 1.1.2 it resolved them against that parent's
+    // BORDER BOX, UNSCROLLED. Both are wrong: the containing block for an
+    // absolutely-positioned child is the parent's PADDING box, laid out in the
+    // parent's scrolled content coordinates.
+    //
+    // jsdom cannot see this at all — it has no layout, so `clientTop`,
+    // `clientWidth` and `scrollTop` are 0 on every element and the two
+    // formulas agree exactly. Measured here instead: a 20px-bordered pane
+    // scrolled 450px put the host 438px above its trigger, in Chrome, with the
+    // published artifact.
+    //
+    // The assertion is the only one that matters to a user: the popover's top
+    // edge is on the trigger's bottom edge, at every scroll offset.
+    name: "card 12: 'absolute' stays welded to its trigger while the offsetParent scrolls",
+    fn: async () => {
+      const file = '12-strategy-absolute.vue'
+      const pane = __pg.stage(file).querySelector('.pane')
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      __pg.set(__tt.select(file, 'strategy'), 'absolute')
+      // Park the card mid-screen first. `placement: 'bottom'` is fit-based:
+      // a trigger sitting below the fold has no room underneath it, the host
+      // legitimately flips to `top`, and the gap this check measures becomes
+      // the height of the host plus the trigger instead of zero.
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      await __pg.sleep(400)
+
+      // The card can only carry this check if the pane really is the origin
+      // AND really scrolls — record both rather than assuming them.
+      const origin = pop.offsetParent === pane ? 'pane' : (pop.offsetParent?.className ?? 'none')
+      const border = Math.round(pane.clientTop)
+      const max = pane.scrollHeight - pane.clientHeight
+
+      const at = async (scrollTop) => {
+        pane.scrollTop = scrollTop
+        pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+        await __pg.sleep(350)
+        const gap = pop.getBoundingClientRect().top - trigger.getBoundingClientRect().bottom
+        return {
+          scrollTop: Math.round(pane.scrollTop),
+          gap: Math.round(gap * 100) / 100,
+          // Recorded so a flip reads as a flip in the detail line rather than
+          // as an unexplained constant offset.
+          side: pop.dataset.teleportPlacement,
+        }
+      }
+
+      const seen = []
+      for (const t of [0, Math.round(max / 3), Math.round((max * 2) / 3), max]) seen.push(await at(t))
+
+      return {
+        pass:
+          origin === 'pane' &&
+          border >= 1 &&
+          max > 60 &&
+          // Distinct scroll offsets, or the sweep proves nothing.
+          new Set(seen.map((s) => s.scrollTop)).size >= 3 &&
+          // Sub-pixel tolerance only: the released build was out by 438px.
+          seen.every((s) => s.side === 'bottom' && Math.abs(s.gap) <= 1),
+        detail:
+          `offsetParent=${origin} border=${border}px scrollable=${max}px · ` +
+          seen.map((s) => `@${s.scrollTop}→${s.side} gap ${s.gap}px`).join(' '),
       }
     },
   },

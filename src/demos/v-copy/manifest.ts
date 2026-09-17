@@ -5,7 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-copy',
   tagline:
     'Make any element copyable. Click a <li>, a <code>, a table cell — its text is on the clipboard. Plus copy history, a "Copied!" state, keyboard + screen-reader support, and an automatic clipboard fallback, all from one binding.',
-  status: '1.2.0 local — npm has 1.1.0 (verified 2026-09-14); 1.1.1 and 1.2.0 are staged, unpublished. The unscoped name is squatted.',
   notes: [
     'The Clipboard API needs a secure context. localhost counts, so real copies work here — paste somewhere to confirm.',
     'Card 16 is the one with a browser-only hazard behind it: pressing a non-interactive trigger collapses the document selection BEFORE the click handler runs (measured — a <button> keeps it, a <span> does not), so `.selection` captures it on pointerdown instead of reading it late.',
@@ -66,8 +65,9 @@ const manifest: LibraryManifest = {
     {
       file: '09-disabled-trigger.vue',
       title: 'Disabled state and custom triggers',
-      blurb: 'v-copy="false" detaches; trigger picks the DOM event; trigger: false is programmatic-only.',
-      tags: ['disabled', 'trigger', 'v-copy="false"'],
+      blurb:
+        'v-copy="false" detaches; trigger picks the DOM event; trigger: false is programmatic-only. A key-shaped trigger keeps the host in the tab order — it cannot receive a keydown otherwise.',
+      tags: ['disabled', 'trigger', 'v-copy="false"', "trigger: 'keydown'"],
     },
     {
       file: '10-a11y.vue',

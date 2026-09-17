@@ -97,6 +97,28 @@ if (UNALIASED.size) {
 }
 
 /**
+ * What the page should tell the reader it is running. DOCS-6.
+ *
+ * The header printed `sources from ../<package>/` unconditionally, off
+ * `PLAYGROUND_TARGET`, which only ever says *which* sibling entry an alias
+ * points at — never whether any alias was installed. Under `GITHUB_ACTIONS`
+ * none is: every library resolves from the published tarball in
+ * `node_modules`. So the deployed site has been telling visitors it runs source
+ * from directories that are not in the repository they are looking at, on the
+ * same page whose Documentation view was insisting those directories do not
+ * exist. Computed here because this is the only place that knows.
+ */
+const SOURCED = LIBRARY_ALIASES.length
+const TOTAL = Object.keys(LIBRARIES).length
+const ENTRY_KIND = TARGET === 'dist' ? 'dist builds' : 'sources'
+const ORIGIN =
+  SOURCED === 0
+    ? 'published npm packages'
+    : SOURCED === TOTAL
+      ? `${ENTRY_KIND} from ../<package>/`
+      : `${SOURCED}/${TOTAL} ${ENTRY_KIND} from ../<package>/, the rest from npm`
+
+/**
  * Upload endpoints for the `v-dropzone` tab. XHR progress events only fire
  * against a real HTTP endpoint, so the dev server grows three: one that
  * succeeds slowly (progress stays visible), one that 500s, one that hangs
@@ -167,6 +189,7 @@ export default defineConfig({
   plugins: [vue(), uploadMockPlugin()],
   define: {
     __PLAYGROUND_TARGET__: JSON.stringify(TARGET),
+    __PLAYGROUND_ORIGIN__: JSON.stringify(ORIGIN),
   },
   resolve: {
     alias: [

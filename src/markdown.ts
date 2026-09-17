@@ -81,8 +81,14 @@ const splitRow = (line: string): string[] =>
     .split('|')
     .map((part) => part.replace(/\u0001/g, '|'))
 
-/** Anything that starts a new block, and therefore ends the one being read. */
-const BLOCK_OPENER = /^(#{1,6}\s|\s*```|>|\s*[-*+]\s|\s*\d+[.)]\s|(-{3,}|\*{3,}|_{3,})\s*$)/
+/**
+ * Anything that starts a new block, and therefore ends the one being read.
+ *
+ * The fence alternative must stay in step with the opener matched in
+ * `renderMarkdown` — a line this calls a new block while that calls it prose is
+ * a line no branch consumes, which is the hang DOCS-6 found.
+ */
+const BLOCK_OPENER = /^(#{1,6}\s|\s*[`~]{3}|>|\s*[-*+]\s|\s*\d+[.)]\s|(-{3,}|\*{3,}|_{3,})\s*$)/
 
 const isTableDivider = (line: string) => /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(line) && line.includes('-')
 
@@ -112,14 +118,27 @@ export function renderMarkdown(source: string): string {
     // `scripts/docs.mjs`, which compares the blocks on screen with the blocks in
     // the file. The same indent is stripped from the body, so the code is not
     // rendered two spaces to the right of every other block.
-    const fence = line.match(/^(\s*)```(\w*)\s*$/)
+    //
+    // The opener is whatever GFM calls one — three or more backticks or tildes,
+    // any info string — and the language is the info string's first word. This
+    // used to be `(\w*)` followed by end-of-line, so ```` ```ts twoslash ````
+    // and ```` ```` ```` matched nothing here; being block openers, they were
+    // then claimed by no rule at all and **hung the browser** (see the paragraph
+    // branch below). Closing against the opener's own marker and length is what
+    // lets a four-backtick fence contain three backticks.
+    //
+    // `scripts/docs/extract.mjs` scans fences with the same rule, which is the
+    // point: a block it sees and this file does not renders as prose with
+    // visible backticks on a page nobody diffed.
+    const fence = line.match(/^(\s*)([`~]{3,})(.*)$/)
     if (fence) {
       closeList()
       const indent = fence[1]
-      const language = fence[2]
+      const language = fence[3].trim().split(/\s+/)[0]
+      const closer = new RegExp(`^\\s*${fence[2][0]}{${fence[2].length},}\\s*$`)
       const body: string[] = []
       index++
-      while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) {
+      while (index < lines.length && !closer.test(lines[index])) {
         body.push(lines[index].startsWith(indent) ? lines[index].slice(indent.length) : lines[index])
         index++
       }
@@ -204,14 +223,27 @@ export function renderMarkdown(source: string): string {
       continue
     }
 
-    // Paragraph: everything up to the next blank line or block-level opener.
+    // Paragraph: this line, plus everything up to the next blank line or
+    // block-level opener.
+    //
+    // **The first line is taken unconditionally, and that is what guarantees
+    // this loop terminates.** Every other branch above consumes at least one
+    // line; this one used to consume none whenever `line` was itself a block
+    // opener that no branch above had claimed — `BLOCK_OPENER` stopped the loop
+    // on its first test, nothing was pushed, `index` never moved, and the tab
+    // froze with a pegged CPU. The only shape that reached it was a fence the
+    // opener regex did not match, which the branch above now fixes; leaving the
+    // guarantee to that agreement is how it comes back. A renderer that hangs
+    // is worse than one that renders a line wrongly, so it cannot depend on two
+    // regexes staying in step.
     closeList()
-    const paragraph: string[] = []
+    const paragraph: string[] = [line]
+    index++
     while (index < lines.length && lines[index].trim() && !BLOCK_OPENER.test(lines[index])) {
       paragraph.push(lines[index])
       index++
     }
-    if (paragraph.length) out.push(`<p class="md-p">${inline(escapeHtml(paragraph.join('\n')))}</p>`)
+    out.push(`<p class="md-p">${inline(escapeHtml(paragraph.join('\n')))}</p>`)
   }
 
   closeList()

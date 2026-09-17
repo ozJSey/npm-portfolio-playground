@@ -5,8 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/bigdecimal-string',
   tagline:
     'Exact decimal arithmetic on strings, backed by BigInt. Every card here is the same expression twice — plain JavaScript on the left, the library on the right — because "0.30" means nothing until it sits beside 0.30000000000000004.',
-  status:
-    'Published — 1.2.0 on npm (@ozjsey/bigdecimal-string), released 2026-09-14 per the registry. 1.2.1 is built locally and NOT published: it fixes operand scale, adds the separator standard, and guards negative scales and dangling exponents. 175 unit tests + 72 browser checks.',
   notes: [
     'Both columns are computed by this browser. Nothing on this tab is a printed literal: a hardcoded 0.30000000000000004 would be a claim ABOUT JavaScript rather than a demonstration of one, and it could rot without anybody noticing.',
     'Two README sentences did not survive being computed live, and the cards that hit them say so on the card. 1e15 does not print as 1e+15 (doubles go exponential at 1e21, card 03). (1e21).toLocaleString() does not return "1e+21" on any engine with ICU (card 03). A third — bd("1,234.56") returning "1.234" — was a real defect rather than a wording problem, and 1.2.1 fixed it: grouped input is now read, validated rather than stripped, and toFormat() output reads back (card 11).',

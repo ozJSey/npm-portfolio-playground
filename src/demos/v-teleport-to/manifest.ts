@@ -5,8 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-teleport-to',
   tagline:
     'Viewport-aware fixed positioning relative to a reference element — dropdowns, popovers and autocompletes that escape every overflow and clip container without a wrapper component.',
-  status:
-    'v1.1.1 — 854/854 tests; the fit test measures the CONTENT, not the box the host happened to have (TT-17/18/19), and since 1.1.1 useTeleportTo measures it AFTER the render that changed it (TT-22)',
   notes: [
     'Positioning is recomputed on scroll and resize, RAF-batched. Scroll the page or a demo container with a popover open and it tracks.',
     'A template ref is null during the render pass that reads it, so the directive always sees `to: null` on its first mounted call and positions on the update that follows. Nothing to work around — but it means `to` resolving late is the normal path, not an edge case.',

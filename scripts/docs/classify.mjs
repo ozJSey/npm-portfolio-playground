@@ -7,11 +7,14 @@
  * ```` ```json ```` are prose that happens to be monospaced. An output sample, a
  * directory diagram or a log excerpt says so by not claiming to be Vue.
  *
- * That choice is forced by `src/markdown.ts`, which renders these same fences in
- * the Documentation view and matches a **bare language word only** — a fence
- * carrying ```` ```ts ignore ```` would stop rendering as code at all, on the very
- * page this gate exists to protect. Anything encoded after the language is
- * therefore itself reported (`FENCE_INFO_STRING`).
+ * There used to be a `FENCE_INFO_STRING` error here as well, because
+ * `src/markdown.ts` matched a **bare language word only**: a fence carrying
+ * ```` ```ts ignore ```` stopped rendering as code at all on the very page this
+ * gate protects. DOCS-6 found the sharper end of that — such a fence did not
+ * merely render wrongly, it spun the renderer forever — and fixed the renderer
+ * to read the whole info string, GFM's way and `extract.mjs`'s way. The finding
+ * went with it: a README is now free to write ```` ```vue {1,3} ````, and a gate
+ * that failed it would be enforcing a limitation that no longer exists.
  *
  * Two things are never silently skipped, because `tickets/DOCS-3` is explicit
  * that silent skipping is how a gate stops gating:
@@ -101,18 +104,6 @@ export function classifyBlock(block) {
       )
     }
     return { runnable: false, findings }
-  }
-
-  if (block.info !== block.lang) {
-    findings.push(
-      finding(
-        'error',
-        'FENCE_INFO_STRING',
-        `fence says \`${block.info}\`. src/markdown.ts only matches a bare language word, so ` +
-          `this block does not render as code in the Documentation view at all.`,
-        block.startLine,
-      ),
-    )
   }
 
   return { runnable: true, findings }

@@ -38,7 +38,16 @@ jobs:
       - run: pnpm test:npm
       - run: pnpm audit:npm
       - run: pnpm typecheck
+      # DOCS-6. `markdown` needs no browser and catches a renderer that cannot
+      # terminate, so it runs before anything launches Chrome. `docs:ci` builds
+      # this repository alone and asserts every documentation tab renders a
+      # published README — the check that was missing while all ten of them
+      # showed an error banner on the live site. `tabs` drives both tab strips
+      # with real keys.
+      - run: pnpm markdown
       - run: pnpm build
+      - run: pnpm docs:ci
+      - run: pnpm tabs
       - run: pnpm smoke
       - run: pnpm interactions
       - run: pnpm geometry

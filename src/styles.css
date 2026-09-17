@@ -24,6 +24,24 @@
   --stage-text: #1c2130;
   --stage-border: #d8dde8;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* One spacing scale, so "give it room" is a step on a ladder rather than
+     another hand-picked rem. DOCS-6: the owner's word for the old spacing was
+     "cluttered", and it was cluttered because thirty rules each invented their
+     own number. Steps are roughly 1.5×, which is coarse enough that adjacent
+     ones read as different. */
+  --space-1: 0.25rem;
+  --space-2: 0.4rem;
+  --space-3: 0.65rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+
+  /* A comfortable line length for prose. Applied to paragraphs and lists only —
+     code blocks and tables get the full column, because wrapping a sample to
+     make it pretty is how a copy-pasteable snippet stops being one. */
+  --measure: 72ch;
 }
 
 *,
@@ -97,8 +115,8 @@ kbd {
 
 .tabs {
   display: flex;
-  gap: 0.25rem;
-  padding: 0 1.25rem;
+  gap: var(--space-1);
+  padding: 0 var(--space-5);
   overflow-x: auto;
   scrollbar-width: thin;
 }
@@ -135,11 +153,20 @@ kbd {
   margin-left: 0.35em;
 }
 
+/* A roving-tabindex strip has exactly one tab stop, so the focus ring is the
+   only thing telling a keyboard user which tab the arrows will move from. It
+   has to be unmistakable on both strips. */
+.tab:focus-visible,
+.views__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 15rem;
-  gap: 1.5rem;
-  padding: 1.5rem 1.25rem 6rem;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-5) var(--space-7);
   max-width: 1500px;
   margin: 0 auto;
   align-items: start;
@@ -155,7 +182,7 @@ kbd {
 }
 
 .lib-head {
-  margin-bottom: 1.25rem;
+  margin-bottom: var(--space-6);
 }
 
 .lib-head__pkg {
@@ -175,33 +202,26 @@ kbd {
 }
 
 .lib-head p {
-  margin: 0.35rem 0 0;
+  margin: var(--space-3) 0 0;
   color: var(--text-dim);
-  max-width: 78ch;
-}
-
-.lib-head__status {
-  display: inline-block;
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.05rem 0.55rem;
+  max-width: var(--measure);
 }
 
 .lib-head__notes {
-  margin: 0.75rem 0 0;
-  padding: 0.6rem 0.85rem;
+  margin: 0 0 var(--space-6);
+  /* The left padding has to clear the list markers as well as the rule, or the
+     bullets sit on top of the border. */
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
   border-left: 2px solid var(--accent-dim);
   background: var(--bg-raised);
   border-radius: 0 6px 6px 0;
   font-size: 0.85rem;
+  line-height: 1.6;
   color: var(--text-dim);
 }
 
 .lib-head__notes li + li {
-  margin-top: 0.3rem;
+  margin-top: var(--space-2);
 }
 
 .toc {
@@ -679,35 +699,52 @@ kbd {
  * authored here — the file on screen is the file npm shows.
  */
 
-.lib-head__views {
-  display: inline-flex;
-  gap: 0.25rem;
-  margin-left: 0.6rem;
-  vertical-align: middle;
+/* Playground / Documentation — a tab strip, not two pills.
+ *
+ * DOCS-6, the owner: "Please do not use just buttons to switch between
+ * documentation and playground, use tabs." These were pills sitting inline
+ * after the tagline, which is what a toggle looks like, not what a tab looks
+ * like. A tab is attached to the thing it reveals: the strip and the panel
+ * share one border, and the selected tab is the piece of that border missing —
+ * the panel and the tab are visibly one surface. `src/tablist.ts` and App.vue
+ * carry the other half of the promise, which is the keyboard. */
+.views__tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
 }
 
-.lib-head__view {
+.views__tab {
   appearance: none;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-family: var(--mono);
-  padding: 0.22rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  margin-bottom: -1px;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
 }
 
-.lib-head__view:hover {
+.views__tab:hover {
   color: var(--text);
   background: var(--bg-raised);
 }
 
-.lib-head__view[aria-selected='true'] {
-  color: var(--bg);
-  background: var(--accent);
-  border-color: var(--accent);
+.views__tab[aria-selected='true'] {
+  color: var(--text);
+  background: var(--bg-raised);
+  border-color: var(--border);
+  /* The seam. The selected tab paints over the strip's own bottom border in the
+     panel's colour, which is what makes the two read as one surface. */
+  box-shadow: 0 1px 0 0 var(--bg-raised);
+}
+
+.views__panel {
+  padding-top: var(--space-6);
 }
 
 .lib-head__viewcount {
@@ -715,57 +752,80 @@ kbd {
   font-size: 0.72rem;
 }
 
+/* Provenance, not content. Kept quiet and set apart by space rather than by a
+   rule of its own — the README's own `<h1>` already draws one, and two
+   horizontal lines a centimetre apart is the clutter this pass is removing. */
 .docs__source {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-6);
   font-size: 0.78rem;
   color: var(--text-dim);
+  max-width: var(--measure);
 }
 
 /* The rendered README. Dark like the rest of the chrome — this is a reading
-   view, not a demo stage, so it does not get the white `.demo__stage` ground. */
+   view, not a demo stage, so it does not get the white `.demo__stage` ground.
+ *
+ * DOCS-6 typography pass. The column is wide enough for code and tables; the
+ * *prose* inside it is held to `--measure`, because a 100-character line of
+ * body text is the thing that made this page hard to read. Vertical rhythm is
+ * one rule: space above a heading is what separates sections, so headings own
+ * their top margin and nothing else fights them for it. */
 .md {
-  max-width: 62rem;
-  line-height: 1.65;
-  font-size: 0.92rem;
+  max-width: 68rem;
+  line-height: 1.7;
+  font-size: 0.95rem;
   color: var(--text);
 }
 
 .md-h {
   line-height: 1.25;
-  margin: 1.8rem 0 0.7rem;
+  margin: var(--space-6) 0 var(--space-4);
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .md-h1 {
-  font-size: 1.6rem;
+  font-size: 1.9rem;
   margin-top: 0;
-  padding-bottom: 0.4rem;
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
 .md-h2 {
-  font-size: 1.25rem;
-  padding-bottom: 0.3rem;
+  font-size: 1.4rem;
+  margin-top: var(--space-7);
+  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border);
 }
 
 .md-h3 {
-  font-size: 1.05rem;
+  font-size: 1.12rem;
 }
 
 .md-h4,
 .md-h5,
 .md-h6 {
-  font-size: 0.95rem;
+  font-size: 1rem;
+  color: var(--text-dim);
 }
 
+/* No `white-space: pre-line`.
+ *
+ * It used to be here, and it made every paragraph break exactly where the
+ * README's source file happens to be hard-wrapped — around 100 characters, or
+ * wherever the author hit Enter. The result was a ragged right edge, orphaned
+ * half-lines, and a measure set by a text editor rather than by the reader's
+ * window. GFM says a single newline inside a paragraph is a space, which is
+ * what npm and GitHub render; letting the text reflow is both more readable
+ * and more faithful to the page this view is a copy of. */
 .md-p {
-  margin: 0.7rem 0;
-  white-space: pre-line;
+  margin: var(--space-4) 0;
+  max-width: var(--measure);
 }
 
 .md-a {
   color: var(--accent);
+  text-underline-offset: 0.2em;
 }
 
 .md-img {
@@ -774,26 +834,29 @@ kbd {
 }
 
 .md .md-list {
-  margin: 0.6rem 0;
-  padding-left: 1.4rem;
+  margin: var(--space-4) 0;
+  padding-left: var(--space-5);
+  max-width: var(--measure);
 }
 
 .md .md-list li {
-  margin: 0.25rem 0;
+  margin: var(--space-2) 0;
 }
 
+/* Borderless. A dense options paragraph can carry a dozen code spans, and a
+   box around each one turns the sentence into a fence. Background alone is
+   enough to separate code from prose. */
 .md code {
   font-family: var(--mono);
-  font-size: 0.84em;
+  font-size: 0.85em;
   background: var(--bg-inset);
-  border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 0.05rem 0.32rem;
+  padding: 0.1em 0.35em;
 }
 
 .md-pre {
-  margin: 0.8rem 0;
-  padding: 0.8rem 0.9rem;
+  margin: var(--space-5) 0;
+  padding: var(--space-4) var(--space-4) var(--space-4);
   background: #0b0e15;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -818,40 +881,61 @@ kbd {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-dim);
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-3);
 }
 
 .md-quote {
-  margin: 0.9rem 0;
-  padding: 0.1rem 0.9rem;
+  margin: var(--space-5) 0;
+  padding: var(--space-2) var(--space-4);
   border-left: 3px solid var(--accent-dim);
   background: var(--bg-raised);
   border-radius: 0 8px 8px 0;
+  max-width: var(--measure);
+}
+
+/* A blockquote is prose in a box that already has a measure — a second one
+   inside it would shorten the line twice. */
+.md-quote .md-p,
+.md-quote .md-list {
+  max-width: none;
 }
 
 .md-hr {
   border: 0;
   border-top: 1px solid var(--border);
-  margin: 1.6rem 0;
+  margin: var(--space-6) 0;
 }
 
 /* Wide tables scroll inside their own box rather than widening the page. */
 .md-table-wrap {
   overflow-x: auto;
-  margin: 0.9rem 0;
+  margin: var(--space-5) 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .md-table {
   border-collapse: collapse;
-  font-size: 0.84rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
 }
 
 .md-table th,
 .md-table td {
-  border: 1px solid var(--border);
-  padding: 0.35rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
   text-align: left;
   vertical-align: top;
+}
+
+.md-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.md-table th:last-child,
+.md-table td:last-child {
+  border-right: 0;
 }
 
 .md-table th {

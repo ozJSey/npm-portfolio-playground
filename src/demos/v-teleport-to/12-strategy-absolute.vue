@@ -37,9 +37,16 @@ const options = computed(() => ({
   </div>
 
   <p class="pg-muted">
-    <code>'absolute'</code> positions against the host's <code>offsetParent</code>, so the host
-    lives <em>inside</em> the pane and scrolls with it — at the cost of being clipped by it.
-    <code>'fixed'</code> (the default) keeps viewport coordinates and escapes the clip.
+    <code>'absolute'</code> positions against the host's <code>offsetParent</code> — here the
+    pane itself — so the host lives <em>inside</em> the pane and scrolls with it, at the cost of
+    being clipped by it. <code>'fixed'</code> (the default) keeps viewport coordinates and escapes
+    the clip.
+  </p>
+  <p class="pg-muted">
+    The coordinates resolve against the offsetParent's <strong>padding box, in its scrolled
+    content coordinates</strong> — not against the border box <code>getBoundingClientRect()</code>
+    returns. The pane's 2px border and its own <code>scrollTop</code> are both terms in that
+    origin; scroll the pane and the popover stays welded to its trigger.
   </p>
   <p class="pg-muted">
     The origin is the host's own <code>offsetParent</code>, so with
@@ -51,7 +58,15 @@ const options = computed(() => ({
 </template>
 
 <style scoped>
+/* `position: relative` and `overflow: auto` on the SAME element, which is the
+   shape the strategy is documented for ("the host lives inside a scrolling
+   parent"). It also makes the card able to fail: the offsetParent now has a
+   border AND a scroll offset of its own, and both are terms in the coordinate
+   origin. With the wrapper positioned instead, the parent never scrolled
+   relative to the reference and the card could not have shown a wrong
+   origin at all. */
 .pane {
+  position: relative;
   height: 180px;
   overflow: auto;
   border: 2px solid #4f46e5;
@@ -59,7 +74,6 @@ const options = computed(() => ({
   background: #fbfcfe;
 }
 .inner {
-  position: relative;
   padding: 0.6rem;
 }
 .filler {

@@ -10,6 +10,7 @@ import {
 import type { Demo } from './registry'
 import { cardHref, matchesCard, parseHash } from './card-link'
 import { libraryFailures } from './libraries'
+import { nextTabIndex } from './tablist'
 import { clearAllEdits, editedDemoIds } from './storage'
 import DemoCard from './components/DemoCard.vue'
 import Documentation from './components/Documentation.vue'
@@ -24,7 +25,8 @@ const activeId = ref(libraries[0]?.id ?? '')
  * meaning what it means. Documentation is `#<library-id>/docs`, which leaves
  * `#<library-id>/<file>.vue` free for the per-card deep link DOCS-1 still owes.
  */
-const view = ref<'playground' | 'docs'>('playground')
+type View = 'playground' | 'docs'
+const view = ref<View>('playground')
 const dirtyIds = ref(new Set(editedDemoIds()))
 const filter = ref('')
 
@@ -49,7 +51,14 @@ const filter = ref('')
 const deepLinkedFile = ref('')
 const unknownCard = ref('')
 
-const target = __PLAYGROUND_TARGET__
+/**
+ * Where the libraries on this page actually came from, in words — sibling
+ * sources, sibling dist builds, or the published npm packages. Computed in
+ * `vite.config.ts`, which is the only place that knows whether an alias was
+ * installed. It replaces a hardcoded "sources from ../<package>/" that the
+ * deployed site printed while running none of them (DOCS-6).
+ */
+const origin = __PLAYGROUND_ORIGIN__
 // ?editors=open mounts every card with its editor visible — used by the smoke
 // test to catch failures that only occur when CodeMirror instantiates.
 const editorsOpen = new URLSearchParams(location.search).get('editors') === 'open'
@@ -98,11 +107,52 @@ function select(id: string) {
   window.scrollTo({ top: 0 })
 }
 
-function showView(next: 'playground' | 'docs') {
+function showView(next: View) {
   view.value = next
   clearDeepLink()
   location.hash = next === 'docs' ? `${activeId.value}/docs` : activeId.value
   window.scrollTo({ top: 0 })
+}
+
+/* --------------------------------------------------------------------------
+ * Two real tab strips
+ *
+ * Both were `role="tablist"` already and neither behaved like one: every tab
+ * was its own tab stop and no arrow key moved between them. `src/tablist.ts`
+ * says why that particular lie is embarrassing on this particular site.
+ *
+ * Ids are computed rather than collected through template refs, because they
+ * are needed anyway — `aria-controls` on the tab and `aria-labelledby` on the
+ * panel are what tie the two halves together for a screen reader, and once the
+ * id exists, `getElementById` is a shorter path to "focus the tab I just
+ * selected" than a ref array.
+ * -------------------------------------------------------------------------- */
+const VIEWS = ['playground', 'docs'] as const
+const VIEW_LABELS: Record<View, string> = { playground: 'Playground', docs: 'Documentation' }
+
+const libTabId = (id: string) => `tab-library-${id}`
+const viewTabId = (name: View) => `tab-view-${name}`
+
+/** Selection follows focus (APG automatic activation), so move focus with it. */
+function focusTab(id: string) {
+  void nextTick(() => document.getElementById(id)?.focus())
+}
+
+function onLibraryKeydown(event: KeyboardEvent) {
+  const index = libraries.findIndex((l) => l.id === activeId.value)
+  const next = nextTabIndex(event.key, { count: libraries.length, index })
+  if (next === null) return
+  event.preventDefault()
+  select(libraries[next].id)
+  focusTab(libTabId(libraries[next].id))
+}
+
+function onViewKeydown(event: KeyboardEvent) {
+  const next = nextTabIndex(event.key, { count: VIEWS.length, index: VIEWS.indexOf(view.value) })
+  if (next === null) return
+  event.preventDefault()
+  showView(VIEWS[next])
+  focusTab(viewTabId(VIEWS[next]))
 }
 
 function clearDeepLink() {
@@ -197,8 +247,7 @@ onBeforeUnmount(() => {
     <div class="app-header__bar">
       <h1 class="app-header__title">v-* portfolio playground</h1>
       <span class="app-header__meta">
-        {{ libraries.length }} libraries · {{ demoCount }} demos ·
-        {{ target === 'dist' ? 'dist builds' : 'sources' }} from <code>../&lt;package&gt;/</code>
+        {{ libraries.length }} libraries · {{ demoCount }} demos · {{ origin }}
       </span>
       <span class="app-header__spacer" />
       <input
@@ -212,13 +261,16 @@ onBeforeUnmount(() => {
         Reset {{ dirtyCount }} edited demo(s)
       </button>
     </div>
-    <nav class="tabs" role="tablist">
+    <nav class="tabs" role="tablist" aria-label="Library" @keydown="onLibraryKeydown">
       <button
         v-for="lib in libraries"
         :key="lib.id"
         class="tab"
         role="tab"
+        :id="libTabId(lib.id)"
         :aria-selected="lib.id === active.id"
+        :tabindex="lib.id === active.id ? 0 : -1"
+        aria-controls="library-panel"
         @click="select(lib.id)"
       >
         {{ lib.id }}<span class="tab__count">{{ lib.demos.length }}</span>
@@ -227,7 +279,7 @@ onBeforeUnmount(() => {
   </header>
 
   <main class="layout">
-    <div>
+    <div id="library-panel" role="tabpanel" :aria-labelledby="libTabId(active.id)">
       <!--
         PG-22. Rendered on every tab, with a stable class and a `data-package`
         per line, so `scripts/smoke.mjs` finds it in a `--dump-dom` snapshot of
@@ -237,7 +289,7 @@ onBeforeUnmount(() => {
       <section v-if="failedLibraries.length" class="pg-library-failures">
         <h2>
           {{ failedLibraries.length }} librar{{ failedLibraries.length === 1 ? 'y' : 'ies' }} failed to
-          load ({{ target === 'dist' ? 'dist builds' : 'sources' }})
+          load ({{ origin }})
         </h2>
         <p
           v-for="failure in failedLibraries"
@@ -276,72 +328,89 @@ onBeforeUnmount(() => {
       <div class="lib-head">
         <h2>{{ active.id }} <span class="lib-head__pkg">{{ active.pkg }}</span></h2>
         <p>{{ active.tagline }}</p>
-        <span class="lib-head__status">{{ active.status }}</span>
-        <div class="lib-head__views" role="tablist" aria-label="View">
-          <button
-            class="lib-head__view"
-            role="tab"
-            :aria-selected="view === 'playground'"
-            @click="showView('playground')"
-          >
-            Playground <span class="lib-head__viewcount">{{ active.demos.length }}</span>
-          </button>
-          <button
-            class="lib-head__view"
-            role="tab"
-            :aria-selected="view === 'docs'"
-            @click="showView('docs')"
-          >
-            Documentation
-          </button>
-        </div>
-        <ul v-if="view === 'playground' && active.notes?.length" class="lib-head__notes">
-          <li v-for="note in active.notes" :key="note">{{ note }}</li>
-        </ul>
       </div>
 
-      <Documentation v-if="view === 'docs'" :library="active" />
-      <template v-else>
+      <!--
+        A real tab widget, not two buttons that toggle a boolean. The strip is
+        one tab stop, arrows move within it (src/tablist.ts), each tab names the
+        panel it controls and the panel names the tab that labels it — and it is
+        drawn attached to that panel, sharing its top edge, so the relationship
+        the ARIA describes is the one the eye sees.
+      -->
+      <div class="views">
+        <div class="views__tabs" role="tablist" aria-label="View" @keydown="onViewKeydown">
+          <button
+            v-for="name in VIEWS"
+            :key="name"
+            class="views__tab"
+            role="tab"
+            :id="viewTabId(name)"
+            :aria-selected="view === name"
+            :tabindex="view === name ? 0 : -1"
+            aria-controls="view-panel"
+            @click="showView(name)"
+          >
+            {{ VIEW_LABELS[name] }}
+            <span v-if="name === 'playground'" class="lib-head__viewcount">
+              {{ active.demos.length }}
+            </span>
+          </button>
+        </div>
 
-        <p v-if="manifestProblems.length" class="demo__banner demo__banner--error">
-          {{ manifestProblems.join(' ') }}
-        </p>
-        <p v-if="orphanedDemoFiles.length" class="demo__banner demo__banner--warn">
-          Not listed in any manifest (so not rendered): {{ orphanedDemoFiles.join(', ') }}
-        </p>
-        <p v-if="missingDemoFiles.length" class="demo__banner demo__banner--warn">
-          Listed in a manifest but missing on disk: {{ missingDemoFiles.join(', ') }}
-        </p>
+        <div
+          id="view-panel"
+          class="views__panel"
+          role="tabpanel"
+          :aria-labelledby="viewTabId(view)"
+        >
+          <Documentation v-if="view === 'docs'" :library="active" />
+          <template v-else>
+            <ul v-if="active.notes?.length" class="lib-head__notes">
+              <li v-for="note in active.notes" :key="note">{{ note }}</li>
+            </ul>
 
-        <section v-if="activeFailure" class="demo pg-library-failure-card">
-          <h3>{{ active.demos.length }} demos on this tab cannot run</h3>
-          <p class="demo__banner demo__banner--error">
-            {{ activeFailure.specifier }} failed to load — {{ activeFailure.message }}
-          </p>
-          <p class="pg-muted">
-            The cards are not rendered because every one of them binds
-            <code>v-{{ active.id.replace(/^v-/, '') }}</code>, and mounting them would bury this
-            message under a screenful of resolve failures. Fix <code>{{ activeFailure.dir }}/</code>,
-            or re-run with <code>PLAYGROUND_UNALIAS={{ activeFailure.dir }}</code>.
-          </p>
-        </section>
+            <p v-if="manifestProblems.length" class="demo__banner demo__banner--error">
+              {{ manifestProblems.join(' ') }}
+            </p>
+            <p v-if="orphanedDemoFiles.length" class="demo__banner demo__banner--warn">
+              Not listed in any manifest (so not rendered): {{ orphanedDemoFiles.join(', ') }}
+            </p>
+            <p v-if="missingDemoFiles.length" class="demo__banner demo__banner--warn">
+              Listed in a manifest but missing on disk: {{ missingDemoFiles.join(', ') }}
+            </p>
 
-        <template v-else>
-          <DemoCard
-            v-for="demo in visibleDemos"
-            :key="demo.id"
-            :demo="demo"
-            :library-id="active.id"
-            :deep-linked="demo.file === deepLinkedFile"
-            :initial-editor-open="editorsOpen"
-            @dirty="onDirty"
-          />
+            <section v-if="activeFailure" class="demo pg-library-failure-card">
+              <h3>{{ active.demos.length }} demos on this tab cannot run</h3>
+              <p class="demo__banner demo__banner--error">
+                {{ activeFailure.specifier }} failed to load — {{ activeFailure.message }}
+              </p>
+              <p class="pg-muted">
+                The cards are not rendered because every one of them binds
+                <code>v-{{ active.id.replace(/^v-/, '') }}</code>, and mounting them would bury this
+                message under a screenful of resolve failures. Fix
+                <code>{{ activeFailure.dir }}/</code>, or re-run with
+                <code>PLAYGROUND_UNALIAS={{ activeFailure.dir }}</code>.
+              </p>
+            </section>
 
-          <p v-if="!visibleDemos.length" class="pg-muted">
-            No demo in this tab matches “{{ filter }}”.
-          </p>
-        </template>
-      </template>
+            <template v-else>
+              <DemoCard
+                v-for="demo in visibleDemos"
+                :key="demo.id"
+                :demo="demo"
+                :library-id="active.id"
+                :deep-linked="demo.file === deepLinkedFile"
+                :initial-editor-open="editorsOpen"
+                @dirty="onDirty"
+              />
+
+              <p v-if="!visibleDemos.length" class="pg-muted">
+                No demo in this tab matches “{{ filter }}”.
+              </p>
+            </template>
+          </template>
+        </div>
+      </div>
     </div>
 
     <aside v-if="view === 'playground'" class="toc">

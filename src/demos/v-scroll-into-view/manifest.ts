@@ -5,7 +5,6 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-scroll-into-view',
   tagline:
     'scrollIntoView() driven by a reactive condition — with edge detection, a pinned scroll container, and sticky-header offsets the native API leaves to you.',
-  status: 'v1.3.1 local — 342/342 tests across 5 workspaces, SIV-6 patch',
   notes: [
     'Native scrollIntoView walks up to the nearest scrollable ancestor, which is usually the page. The container option is the whole point: it pins the scroller you actually meant.',
     'Every demo with a container scrolls inside its own box. The three cards that deliberately exercise the container-less native path (10, 12, 13) let the browser walk the ancestor chain, which moves the page too — that is the behaviour container exists to opt out of.',
