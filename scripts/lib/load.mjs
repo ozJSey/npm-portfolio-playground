@@ -39,12 +39,13 @@
  * That leaves the tick delta: instantaneous, machine-independent, 0..1.
  */
 import os from 'node:os'
+import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 /** Refuse to start above this. The box's own idle floor here is ~0.15. */
 const DEFAULT_MAX = Number(process.env.BUSY_MAX_CPU ?? 0.5)
 /** Sampled *during* a run, where the run is itself most of the load. */
-const DEFAULT_SATURATED = Number(process.env.BUSY_SATURATED_CPU ?? 0.9)
+const DEFAULT_SATURATED = Number(process.env.BUSY_SATURATED_CPU ?? 0.75)
 
 const ticks = () =>
   os.cpus().reduce(
@@ -94,6 +95,53 @@ export function watchCpu({ everyMs = 2000, saturated = DEFAULT_SATURATED } = {})
 }
 
 /**
+ * Another copy of this harness, running right now.
+ *
+ * CPU utilization turned out to be the *weaker* signal, and it took two false
+ * reds to see it. Both times the box looked merely warm — nowhere near the 90%
+ * the in-run watcher waits for — while a second and third `interactions` run
+ * quietly competed for the same cores. Nine checks went red:
+ *
+ *   "discarding an in-flight key"          "flush() sends immediately"
+ *   "the fixed window keeps saving ..."    "real keystrokes during an in-flight slow write"
+ *
+ * All nine passed 9/9 the moment the box had itself back. Every one of them is
+ * a *duration* assertion, and a duration assertion does not need saturation to
+ * fail — it only needs the renderer descheduled at the wrong moment, which one
+ * competing Chrome achieves comfortably.
+ *
+ * So look for the thing itself rather than its symptom. Two harness runs on one
+ * machine is not a degraded condition to be reported afterwards — it is a
+ * guaranteed false-failure source, it is exact rather than heuristic, and it
+ * costs one `ps` to detect.
+ */
+export function competingRuns() {
+  // Anchored at the start of the command so it matches the node process itself
+  // and not the `/bin/zsh -c ...` that launched it — an unanchored pattern
+  // matches the wrapper too, because the wrapper's argv contains the whole
+  // command string, and one run then gets reported as two.
+  const HARNESS = /^(?:\S*\/)?node\s+.*scripts\/(interactions|geometry|smoke|standalone-pages)\.mjs/
+  let out = ''
+  try {
+    out = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' })
+  } catch {
+    return [] // ps is unavailable (or refused); do not invent a reason to stop
+  }
+  // Only this process is "mine". Excluding by PPID as well looks prudent and is
+  // wrong: a genuine competing run started from the same shell shares our parent,
+  // so the exclusion silently swallowed the exact case this detects — the gate
+  // reported 0 competitors with one plainly running. The anchored regex above is
+  // what keeps the shell wrapper out; PPID was never needed for that.
+  const mine = new Set([process.pid])
+  return out
+    .split('\n')
+    .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/))
+    .filter(Boolean)
+    .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), command: m[3] }))
+    .filter((p) => HARNESS.test(p.command) && !mine.has(p.pid) && !mine.has(p.ppid))
+}
+
+/**
  * The gate. Returns the measurement when the box is quiet; exits 2 when it is
  * not, unless `ALLOW_BUSY=1` — in which case it returns with `degraded: true`
  * and the caller is expected to stamp every number it prints afterwards.
@@ -101,6 +149,31 @@ export function watchCpu({ everyMs = 2000, saturated = DEFAULT_SATURATED } = {})
 export async function assertQuietEnough(command, { max = DEFAULT_MAX } = {}) {
   const utilization = await cpuUtilization()
   const pct = (n) => `${Math.round(n * 100)}%`
+
+  // Checked before CPU, and NOT waived by CI: two harness runs on one machine
+  // is a certainty, not a probability, and CI should never have two anyway.
+  const competing = competingRuns()
+  if (competing.length) {
+    console.error(
+      [
+        '',
+        `REFUSING TO START — ${competing.length} other run(s) of this harness are already going.`,
+        '',
+        ...competing.map((c) => `      pid ${c.pid}  ${c.command.slice(0, 96)}`),
+        '',
+        '  Each one drives its own Chrome. The checks below assert debounce windows and',
+        '  in-flight ordering in a renderer, and a competing renderer turns those red for',
+        '  reasons that are not defects — measured twice today, nine checks that all passed',
+        '  9/9 once the box had itself back.',
+        '',
+        '  Wait for them, or kill them:  pkill -f scripts/interactions.mjs',
+        `  Override (results stamped):   ALLOW_BUSY=1 ${command}`,
+        '',
+      ].join('\n'),
+    )
+    if (process.env.ALLOW_BUSY !== '1') process.exit(2)
+    return { utilization, max, degraded: true, competing: competing.length }
+  }
 
   /**
    * CI is the one place where a busy box is not a reason to stop.
