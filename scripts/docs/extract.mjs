@@ -35,7 +35,17 @@
  * keeps the extracted code byte-identical to the rendered code.
  */
 const FENCE_OPEN = /^((?:\s*>)*\s*)(`{3,}|~{3,})(.*)$/
-const HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/
+/**
+ * A heading, including one inside a blockquote.
+ *
+ * The leading `>` arm is not cosmetic. `dependency-grouper`'s README opens a
+ * warning with `> ### ⛔ Do not run generate on a tree whose packages have
+ * different dependencies` — a real heading that the renderer strips the quote
+ * from and gives an id, exactly as GitHub does. Without this arm the extractor
+ * counted 40 headings against the renderer's 41 and the docs build failed on
+ * the disagreement, blaming the renderer for being right.
+ */
+const HEADING = /^\s*(?:>\s*)*(#{1,6})\s+(.+?)\s*#*\s*$/
 
 /** GitHub's heading→anchor rule, which is what `#section` links in these files mean. */
 export function slugify(heading) {
