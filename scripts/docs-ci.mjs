@@ -574,7 +574,8 @@ console.log(
     ? `  ${failures} of ${checked} documentation tabs did NOT render a published README.\n` +
       `  This is what https://ozjsey.github.io${BASE_PATH} will look like.`
     : `  ${checked}/${checked} documentation tabs rendered the published README, with this\n` +
-      `  repository checked out alone. Negative control: pnpm docs:ci --negative-control`,
+      `  repository checked out alone. Negative controls: pnpm docs:ci --negative-control\n` +
+      `  (no README anywhere) and pnpm docs:ci --probe-overflow (one block too wide).`,
 )
 console.log(rule('═'))
 process.exit(failures ? 1 : 0)
