@@ -3,12 +3,14 @@
  * The Documentation view, checked under the conditions it is actually deployed
  * in. `tickets/DOCS-6`.
  *
- *   pnpm docs:ci                     # every tab must render a real README
- *   pnpm docs:ci --negative-control  # with no README anywhere: every tab must fail
- *   pnpm docs:ci --from-head         # build the committed state, not the working tree
- *   pnpm docs:ci --shots <dir>       # PNG of every tab, both colour schemes
- *   pnpm docs:ci --keep              # leave the staged checkout on disk to poke at
- *   pnpm docs:ci --probe-overflow    # widen one block: the layout assertion must go red
+ *   pnpm docs:ci                        # every tab must render a real README
+ *   pnpm docs:ci --negative-control     # with no README anywhere: every tab must fail
+ *   pnpm docs:ci --from-head            # build the committed state, not the working tree
+ *   pnpm docs:ci --shots <dir>          # PNG of every tab, both colour schemes
+ *   pnpm docs:ci --keep                 # leave the staged checkout on disk to poke at
+ *   pnpm docs:ci --probe-overflow       # widen one block: the layout assertion must go red
+ *   pnpm docs:ci --probe-external-links # send the in-page links back out to a new tab:
+ *                                       # the link assertion must go red
  *
  * ## Why this is not `pnpm docs:check`
  *
@@ -40,6 +42,22 @@
  * passes means this script is reading a README from somewhere it was never
  * supposed to look, and it exits non-zero saying so. Per BOARD.md: a gate that
  * cannot be shown failing is decoration.
+ *
+ * ## The links that pointed back at this page
+ *
+ * `_STANDARDS.md` #4 requires every README to link to the live playground near
+ * the top — *"See in action: npm portfolio playground"* — and this view renders
+ * those READMEs **on the live playground**. Every one of those links carried
+ * `target="_blank"`, so it opened a second browser tab showing the page the
+ * reader was already reading. 136 links in the installed corpus do it. The
+ * owner found it reading his own docs page: *"Redirecting to the same website?
+ * :)"*
+ *
+ * So the third thing every tab is held to here: **a link that lands on this app
+ * navigates in this page, and a link that lands anywhere else opens a new tab
+ * with `rel="noreferrer noopener"`**. The check reads `target`, `rel` and the
+ * *browser's own* resolution of `href` out of the live DOM — it never re-runs
+ * the renderer's rule, so it cannot agree with a bug by sharing one.
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -62,6 +80,7 @@ import { Cdp, launchChrome, newPage, sleep } from './lib/cdp.mjs'
 import { waitForBoot } from './lib/boot.mjs'
 import { freePort } from './lib/port.mjs'
 import { libraryIds } from './docs/packages.mjs'
+import { LIVE_SITE } from './docs/links.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..')
@@ -391,6 +410,85 @@ const WIDEN = `(() => {
   return article.querySelector('[data-probe]') !== null
 })()`
 
+/**
+ * `--probe-external-links` puts the defect back **in the page**: every in-page
+ * link is sent back out to a new browser tab at the absolute published URL,
+ * which is byte for byte what `src/markdown.ts` emitted before this was fixed.
+ * The assertion below then has to go red on every tab, or it is not reading the
+ * thing it claims to read.
+ *
+ * `--from-head` is the stronger control and needs no flag at all: it builds the
+ * *committed* app, so on a tree where this fix is not committed yet the check
+ * goes red against the real old renderer rather than a simulation of it.
+ */
+const PROBE_EXTERNAL_LINKS = process.argv.includes('--probe-external-links')
+
+const UNFIX_LINKS = `(() => {
+  const article = document.querySelector('article.md')
+  if (!article) return 0
+  const links = article.querySelectorAll('a[data-in-app], a[data-md-anchor]')
+  for (const a of links) {
+    const route = a.getAttribute('data-in-app')
+    if (route !== null) a.setAttribute('href', ${JSON.stringify(LIVE_SITE)} + (route ? '#' + route : ''))
+    a.setAttribute('target', '_blank')
+    a.setAttribute('rel', 'noreferrer noopener')
+  }
+  return links.length
+})()`
+
+/**
+ * Every `<a>` in the rendered README, sorted into "lands on this app" and
+ * "lands somewhere else", and checked against what each should do.
+ *
+ * **The classification is the browser's, not the renderer's.** `a.href` is
+ * already resolved against the document, so a correct in-page link (`#v-copy`)
+ * and a defective absolute one both arrive here as full URLs and are compared
+ * the same way. Nothing in this function knows how `src/markdown.ts` decides
+ * anything, which is the only way a gate can disagree with the code it guards.
+ *
+ * Two homes count as this app, for the two reasons `src/in-app-link.ts` gives
+ * at length: the document's own origin and path — so a same-origin link can
+ * never open a second copy of the app, whatever origin it is served from — and
+ * the published address the READMEs are written against, which is how the rule
+ * still holds on a dev server at a different origin. The **path** is compared,
+ * not just the origin: `ozjsey.github.io` is a user site and every one of the
+ * owner's projects shares it.
+ */
+const MEASURE_LINKS = `(() => {
+  const PUBLISHED = ${JSON.stringify(LIVE_SITE)}
+  const home = (href) => {
+    let url
+    try { url = new URL(href, location.href) } catch { return null }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    const path = url.pathname.replace(/index\\.html$/i, '')
+    return url.origin + (path.endsWith('/') ? path : path + '/')
+  }
+  const here = home(location.href)
+  const article = document.querySelector('article.md')
+  if (!article) return { inApp: 0, external: 0, offenders: [], offenderCount: 0 }
+
+  const offenders = []
+  let inApp = 0
+  let external = 0
+  for (const a of article.querySelectorAll('a[href]')) {
+    const raw = a.getAttribute('href')
+    const label = (a.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40)
+    const lands = home(a.href)
+    const say = (why) => offenders.push({ raw, label, why, target: a.target || '', rel: a.rel || '' })
+
+    if (lands !== null && (lands === here || lands === PUBLISHED)) {
+      inApp++
+      if (a.target) say('lands on this same page and opens a NEW BROWSER TAB to it')
+      else if (!/^[#?]/.test(raw)) say('lands on this same page but is written as an absolute URL, so following it reloads the app')
+      continue
+    }
+    external++
+    if (a.target !== '_blank') say('leaves this site but does not open a new tab')
+    else if (!/noopener/.test(a.rel) || !/noreferrer/.test(a.rel)) say('leaves this site in a new tab without rel="noreferrer noopener"')
+  }
+  return { inApp, external, offenders: offenders.slice(0, 6), offenderCount: offenders.length }
+})()`
+
 /** Every width, measured. Restores the desktop viewport before it returns. */
 async function measureOverflow(page) {
   const seen = []
@@ -405,7 +503,7 @@ async function measureOverflow(page) {
   return seen
 }
 
-function judge(id, view, overflows) {
+function judge(id, view, overflows, links) {
   if (view.fatal) return [`the app refused to boot: ${view.fatal.slice(0, 300)}`]
   if (!view.mounted) return [`#${id}/docs rendered no .docs view at all`]
   if (view.banner) return [`rendered a reason, not a README: ${view.banner}`]
@@ -430,6 +528,22 @@ function judge(id, view, overflows) {
       )
     }
   }
+  if (links?.offenderCount) {
+    problems.push(
+      `${links.offenderCount} of ${links.inApp + links.external} links in this README behave wrongly ` +
+        `for the page they are rendered on (${links.inApp} land on this app, ${links.external} leave it):`,
+    )
+    for (const o of links.offenders) {
+      problems.push(
+        `  “${o.label}” → ${o.raw}` +
+          `${o.target ? ` [target="${o.target}"]` : ''}${o.rel ? ` [rel="${o.rel}"]` : ''}\n` +
+          `          ${o.why}`,
+      )
+    }
+    if (links.offenderCount > links.offenders.length) {
+      problems.push(`  …and ${links.offenderCount - links.offenders.length} more`)
+    }
+  }
   return problems
 }
 
@@ -444,6 +558,13 @@ let chrome
 let cdp
 let failures = 0
 let checked = 0
+/**
+ * In-page links seen across the whole run. A gate that checked a corpus with
+ * none of them would print a green summary having asserted nothing, so the run
+ * fails when this is zero — the same reason `linkNodeModules` refuses to
+ * proceed when the negative control found no README to withhold.
+ */
+let inAppLinks = 0
 const shots = []
 
 try {
@@ -500,8 +621,11 @@ try {
     await page.evaluate(`location.hash = ${JSON.stringify(`${id}/docs`)}`)
     await sleep(700)
     const view = await page.evaluate(READ_DOCS_VIEW)
+    if (PROBE_EXTERNAL_LINKS) await page.evaluate(UNFIX_LINKS)
+    const links = await page.evaluate(MEASURE_LINKS)
+    inAppLinks += links.inApp
     const overflows = await measureOverflow(page)
-    const problems = judge(id, view, overflows)
+    const problems = judge(id, view, overflows, links)
     checked++
     if (SHOTS) {
       shots.push(...(await captureBothSchemes(cdp, page, `${id}-docs`)))
@@ -519,7 +643,8 @@ try {
           ? ''
           : `${String(view.text).padStart(6)} chars · ${String(view.headings).padStart(3)} headings · ` +
             `${String(view.codeBlocks).padStart(3)} code blocks · ${String(view.tables).padStart(2)} tables · ` +
-            `no page overflow at ${WIDTHS.join('/')}px`),
+            `no page overflow at ${WIDTHS.join('/')}px · ` +
+            `${String(links.inApp).padStart(3)} links stay here, ${String(links.external).padStart(3)} open a new tab`),
     )
     for (const problem of problems) console.log(`        ${problem}`)
   }
@@ -554,6 +679,22 @@ if (NEGATIVE_CONTROL) {
   process.exit(satisfied ? 0 : 1)
 }
 
+if (PROBE_EXTERNAL_LINKS) {
+  const satisfied = checked > 0 && failures >= checked
+  console.log(
+    satisfied
+      ? `  LINK PROBE SATISFIED — all ${checked} tabs went red once their in-page links were sent\n` +
+        `  back out to a new browser tab at ${LIVE_SITE}, which is what\n` +
+        `  src/markdown.ts emitted before this was fixed. The link assertion can fail, so its green\n` +
+        `  run means something.`
+      : `  LINK PROBE FAILED — ${checked - failures} of ${checked} tabs still passed with every in-page\n` +
+        `  link rewritten to open a second copy of this site in a new tab. The link assertion is not\n` +
+        `  reading the page.`,
+  )
+  console.log(rule('═'))
+  process.exit(satisfied ? 0 : 1)
+}
+
 if (PROBE_OVERFLOW) {
   // Its own verdict, not the README one: in this mode every tab is *expected*
   // to be red, and it is red for the layout reason printed above it.
@@ -569,13 +710,28 @@ if (PROBE_OVERFLOW) {
   process.exit(satisfied ? 0 : 1)
 }
 
+/**
+ * A run in which no README linked back at this site checked the link contract
+ * against nothing, and would have printed a green summary for it.
+ */
+const vacuous = !failures && checked > 0 && inAppLinks === 0
+
 console.log(
   failures
-    ? `  ${failures} of ${checked} documentation tabs did NOT render a published README.\n` +
+    ? `  ${failures} of ${checked} documentation tabs did NOT render a published README, or did not\n` +
+      `  render it correctly for the page it is on.\n` +
       `  This is what https://ozjsey.github.io${BASE_PATH} will look like.`
-    : `  ${checked}/${checked} documentation tabs rendered the published README, with this\n` +
-      `  repository checked out alone. Negative controls: pnpm docs:ci --negative-control\n` +
-      `  (no README anywhere) and pnpm docs:ci --probe-overflow (one block too wide).`,
+    : vacuous
+      ? `  ${checked}/${checked} documentation tabs rendered the published README — but not one of them\n` +
+        `  contained a link back to this site, so the in-page link contract was asserted against\n` +
+        `  nothing. _STANDARDS.md #4 requires that link near the top of every README; either the\n` +
+        `  installed packages are stale (pnpm install) or that rule has stopped being followed.`
+      : `  ${checked}/${checked} documentation tabs rendered the published README, with this\n` +
+        `  repository checked out alone — and all ${inAppLinks} links in them that address this site\n` +
+        `  navigate inside this page instead of opening a second copy of it.\n` +
+        `  Negative controls: pnpm docs:ci --negative-control (no README anywhere),\n` +
+        `  pnpm docs:ci --probe-overflow (one block too wide), and\n` +
+        `  pnpm docs:ci --probe-external-links (the in-page links sent back out to a new tab).`,
 )
 console.log(rule('═'))
-process.exit(failures ? 1 : 0)
+process.exit(failures || vacuous ? 1 : 0)

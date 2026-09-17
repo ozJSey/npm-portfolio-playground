@@ -250,7 +250,9 @@ onBeforeUnmount(() => {
         {{ libraries.length }} libraries · {{ demoCount }} demos · {{ origin }}
       </span>
       <span class="app-header__spacer" />
+      <!-- Filters demo cards, so it does nothing on the Documentation tab. -->
       <input
+        v-if="view !== 'docs'"
         v-model="filter"
         class="pg-input"
         type="search"
@@ -325,9 +327,16 @@ onBeforeUnmount(() => {
         {{ active.demos.map((d) => d.slug).join(', ') }}
       </p>
 
+      <!--
+        The tagline is the playground's own one-line pitch for the library. On
+        the Documentation tab the README opens with its own H1 and its own
+        opening sentence directly underneath this, saying the same thing twice
+        in two voices. The heading stays either way — it is where you are — but
+        the tagline steps aside for the document that does the job better.
+      -->
       <div class="lib-head">
         <h2>{{ active.id }} <span class="lib-head__pkg">{{ active.pkg }}</span></h2>
-        <p>{{ active.tagline }}</p>
+        <p v-if="view !== 'docs'">{{ active.tagline }}</p>
       </div>
 
       <!--

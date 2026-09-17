@@ -42,6 +42,10 @@
      code blocks and tables get the full column, because wrapping a sample to
      make it pretty is how a copy-pasteable snippet stops being one. */
   --measure: 72ch;
+  /* The documentation column. Prose, headings, code and tables all share this
+     one edge: a document with two right margins reads as a broken layout, which
+     is what 68rem of container against 72ch of prose looked like. */
+  --measure-doc: 76ch;
 }
 
 *,
@@ -755,11 +759,17 @@ kbd {
 /* Provenance, not content. Kept quiet and set apart by space rather than by a
    rule of its own — the README's own `<h1>` already draws one, and two
    horizontal lines a centimetre apart is the clutter this pass is removing. */
+/* Metadata about the page, not part of it. It sat at nearly body weight above
+   the document and competed with the first heading for the eye. */
 .docs__source {
-  margin: 0 0 var(--space-6);
-  font-size: 0.78rem;
+  margin: 0 0 var(--space-5);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  line-height: 1.5;
   color: var(--text-dim);
-  max-width: var(--measure);
+  opacity: 0.75;
+  max-width: var(--measure-doc);
 }
 
 /* The rendered README. Dark like the rest of the chrome — this is a reading
@@ -770,8 +780,15 @@ kbd {
  * body text is the thing that made this page hard to read. Vertical rhythm is
  * one rule: space above a heading is what separates sections, so headings own
  * their top margin and nothing else fights them for it. */
+/* The Documentation view is a READING layout. It shares the shell with the
+   playground, whose grid suits cards and not a long document — so the column is
+   set here rather than inherited. */
+.docs {
+  max-width: var(--measure-doc);
+}
+
 .md {
-  max-width: 68rem;
+  max-width: var(--measure-doc);
   line-height: 1.7;
   font-size: 0.95rem;
   color: var(--text);
@@ -820,12 +837,43 @@ kbd {
  * and more faithful to the page this view is a copy of. */
 .md-p {
   margin: var(--space-4) 0;
-  max-width: var(--measure);
 }
 
 .md-a {
   color: var(--accent);
   text-underline-offset: 0.2em;
+}
+
+/* Links that do not leave.
+ *
+ * `src/markdown.ts` renders two destinations as in-page navigation instead of a
+ * new browser tab: a URL that resolves to this app (every README links to this
+ * playground — `_STANDARDS.md` #4 — and this *is* the playground), and a
+ * `#section` anchor into the README being read. A dotted underline is the whole
+ * signal. It has to be carried by the appearance rather than by words, because
+ * the words on this page are somebody else's file and this view does not get to
+ * edit them.
+ *
+ * `.docs__inapp-swatch` is the same treatment on the one sentence this view
+ * *does* own, so the note and the links it describes look like each other. */
+.md-a--in-app,
+.md-a--anchor,
+.docs__inapp-swatch {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.docs__inapp-swatch {
+  color: var(--accent);
+}
+
+/* Two provenance lines, one rule between them and the document. */
+.docs__source:not(:last-of-type) {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: var(--space-2);
 }
 
 .md-img {
@@ -836,7 +884,6 @@ kbd {
 .md .md-list {
   margin: var(--space-4) 0;
   padding-left: var(--space-5);
-  max-width: var(--measure);
 }
 
 .md .md-list li {
@@ -890,7 +937,6 @@ kbd {
   border-left: 3px solid var(--accent-dim);
   background: var(--bg-raised);
   border-radius: 0 8px 8px 0;
-  max-width: var(--measure);
 }
 
 /* A blockquote is prose in a box that already has a measure — a second one

@@ -26,13 +26,22 @@
  * extractor disagree about what a fence is, the gate checks samples that are
  * not on screen and ignores text that is. They used to disagree on purpose;
  * they no longer do, and this is what keeps it that way.
+ *
+ * ## 3. Its heading ids are the anchors `#section` links mean
+ *
+ * The same agreement, one level along. `scripts/docs/links.mjs` resolves every
+ * `#section` link in a README against `extract.mjs`'s slugs; `src/markdown.ts`
+ * puts ids on the headings from `src/heading-slug.ts` so those links land. Two
+ * implementations of GitHub's rule, because one runs in a browser and one over
+ * files on disk — so the ids on screen are compared with the slugs off disk,
+ * every README, every run.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { transformSync } from 'esbuild'
+import { buildSync } from 'esbuild'
 import { extractReadme } from './docs/extract.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -105,6 +114,16 @@ const MUTATIONS = {
   },
 }
 
+/**
+ * `src/markdown.ts` (optionally mutated) as one runnable ESM file.
+ *
+ * **Bundled, not transpiled.** It used to be `transformSync`, which was enough
+ * while the renderer imported nothing; it now imports `./in-app-link` (the rule
+ * that decides a link points back at this same page) and `./heading-slug`, and
+ * a transpiled copy in a temp directory cannot resolve either. Bundling is also
+ * the more honest instrument: what runs here is the module graph the browser
+ * runs, rather than one file with its imports sawn off.
+ */
 function buildRenderer(dir, mutations) {
   let source = readFileSync(SOURCE, 'utf8')
   for (const key of mutations) {
@@ -119,7 +138,14 @@ function buildRenderer(dir, mutations) {
     source = source.replace(from, to)
   }
   const file = join(dir, `markdown-${mutations.join('-') || 'as-shipped'}.mjs`)
-  writeFileSync(file, transformSync(source, { loader: 'ts', format: 'esm' }).code)
+  const built = buildSync({
+    stdin: { contents: source, loader: 'ts', sourcefile: SOURCE, resolveDir: dirname(SOURCE) },
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    write: false,
+  })
+  writeFileSync(file, built.outputFiles[0].text)
   return file
 }
 
@@ -177,6 +203,10 @@ const renderedBlocks = (html) =>
     unescape(m[1]),
   )
 
+/** The `id` of every heading the renderer emitted, in document order. */
+const renderedHeadingIds = (html) =>
+  [...html.matchAll(/<h[1-6] class="md-h md-h[1-6]" id="([^"]*)">/g)].map((m) => unescape(m[1]))
+
 const results = []
 const check = (name, ok, detail) => results.push({ name, ok, detail })
 
@@ -210,7 +240,8 @@ function suite(label, rendererFile) {
     // scanned out of the same bytes — same count, same bytes, same order. An
     // unterminated fence is included rather than excused: both sides swallow
     // the rest of the file, so they must swallow the same rest of the file.
-    const expected = extractReadme(text, { file: fixture.name }).blocks
+    const parsed = extractReadme(text, { file: fixture.name })
+    const expected = parsed.blocks
     const shown = renderedBlocks(out.html)
     const agrees =
       shown.length === expected.length && shown.every((code, i) => code === expected[i].code)
@@ -220,6 +251,31 @@ function suite(label, rendererFile) {
       `extract.mjs found ${expected.length} fenced block(s), the renderer emitted ${shown.length}` +
         (shown.length === expected.length
           ? ` — and block ${firstDiff + 1} differs (line ${expected[firstDiff]?.startLine})`
+          : ''))
+
+    /**
+     * ## 3. Its heading ids are the anchors a `#section` link means
+     *
+     * `src/heading-slug.ts` and `extract.mjs`'s `slugify` are two
+     * implementations of GitHub's heading→anchor rule, and they have to be:
+     * one runs in the browser inside the renderer, one runs here in Node over
+     * files on disk. `scripts/docs/links.mjs` validates every `#section` link
+     * in every README against the second, and `src/markdown.ts` puts the first
+     * on the page — so when they disagree, the gate calls a link live and the
+     * Documentation view scrolls nowhere for it. This is the agreement that
+     * stops that, in the same shape as the fenced-block one above.
+     */
+    const wantedIds = parsed.headings.map((h) => h.slug)
+    const shownIds = renderedHeadingIds(out.html)
+    const idsAgree =
+      shownIds.length === wantedIds.length && shownIds.every((id, i) => id === wantedIds[i])
+    const firstIdDiff = wantedIds.findIndex((slug, i) => shownIds[i] !== slug)
+
+    check(`${label}: heading anchors of ${fixture.name}`, idsAgree,
+      `extract.mjs read ${wantedIds.length} heading slug(s), the renderer emitted ${shownIds.length} id(s)` +
+        (shownIds.length === wantedIds.length
+          ? ` — and heading ${firstIdDiff + 1} differs: extract.mjs says ` +
+            `${JSON.stringify(wantedIds[firstIdDiff])}, the page says ${JSON.stringify(shownIds[firstIdDiff])}`
           : ''))
   }
 
@@ -258,7 +314,10 @@ try {
 
     const fenceRun = results.slice(0, afterFence)
     const bothRun = results.slice(afterFence)
-    const fenceRed = fenceRun.filter((r) => !r.ok)
+    // The fence mutation's own verdict is about fenced blocks, so it is counted
+    // over the "renders" checks only — a heading-anchor check that also goes red
+    // under the mutation is printed, but it is not what this half proves.
+    const fenceRed = fenceRun.filter((r) => !r.ok && r.name.includes(': renders '))
     const hangs = bothRun.filter((r) => !r.ok && /DID NOT TERMINATE/.test(r.detail ?? ''))
 
     for (const { name, ok, detail } of [...fenceRed, ...hangs]) {

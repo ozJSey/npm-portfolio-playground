@@ -18,7 +18,30 @@
  * README containing `<script>` renders as text rather than running. Inline code
  * is extracted before any other inline rule so that `**` inside a code span
  * stays literal.
+ *
+ * ## Links, and the one thing this renderer knows about its own page
+ *
+ * A README is written for npm, where every link is somewhere else and a new tab
+ * is the right answer. The Documentation view renders those same READMEs **on
+ * the site half of them link to**, so the same `target="_blank"` that is
+ * correct on npm opens a second copy of the page the reader is already reading.
+ *
+ * Two destinations are therefore rendered as in-page navigation instead, and
+ * both of them are *this document*:
+ *
+ *   - a URL that resolves to this app (`src/in-app-link.ts` owns that rule) —
+ *     rendered as the hash route it names, so it switches tab or lands on a
+ *     card;
+ *   - a bare `#anchor`, which is a heading in the README being read — marked
+ *     `data-md-anchor`, and matched by the `id` this file puts on every
+ *     heading. `Documentation.vue` scrolls to it without touching the route,
+ *     because the hash belongs to the router here and a section link must not
+ *     spend it.
+ *
+ * Everything else keeps `target="_blank" rel="noreferrer noopener"`.
  */
+import { inAppLink } from './in-app-link'
+import { headingSlug } from './heading-slug'
 
 const escapeHtml = (text: string): string =>
   text
@@ -27,9 +50,62 @@ const escapeHtml = (text: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 
+/**
+ * The four entities `escapeHtml` writes, read back.
+ *
+ * `inline` runs over already-escaped text, so a captured href arrives escaped —
+ * `?a=1&b=2` reaches these rules as `?a=1&amp;b=2`. That has to be undone
+ * before the URL is parsed, or `in-app-link.ts` is handed a string that is not
+ * the link the author wrote. It is undone before `safeHref` too, which then
+ * escapes exactly once instead of turning `&amp;` into `&amp;amp;` — a href
+ * that is a different URL from the one in the file. No link in today's corpus
+ * contains an entity, so this changes no byte on screen; it is the pipeline
+ * being right rather than lucky.
+ *
+ * `&amp;` is undone last, which is what keeps a literal `&amp;lt;` literal.
+ */
+const unescapeHtml = (text: string): string =>
+  text
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&')
+
 /** Only http(s) and anchors — a `javascript:` href in a README is a mistake. */
 const safeHref = (href: string): string =>
   /^(https?:\/\/|#|\.\/|\.\.\/|\/)/i.test(href.trim()) ? escapeHtml(href.trim()) : '#'
+
+/**
+ * One rendered `[label](href)`.
+ *
+ * Three destinations, three behaviours — see this file's header. The class is
+ * part of the contract, not decoration: `src/styles.css` marks an in-page link
+ * so the reader can see before clicking that it will not leave, and
+ * `scripts/docs-ci.mjs` reads `target`/`rel`/`href` back out of the live DOM.
+ */
+function renderLink(label: string, rawHref: string): string {
+  const href = unescapeHtml(rawHref)
+
+  const internal = inAppLink(href)
+  if (internal !== null) {
+    const where = internal.route ? `the ${internal.route} view of this page` : 'the top of this page'
+    return (
+      `<a class="md-a md-a--in-app" href="${escapeHtml(internal.href)}"` +
+      ` data-in-app="${escapeHtml(internal.route)}"` +
+      ` title="Stays on this page — goes to ${escapeHtml(where)}">${label}</a>`
+    )
+  }
+
+  if (href.startsWith('#')) {
+    const slug = headingSlug(href.slice(1))
+    return (
+      `<a class="md-a md-a--anchor" href="#${escapeHtml(slug)}" data-md-anchor="${escapeHtml(slug)}"` +
+      ` title="Stays on this page — scrolls to this README's “${escapeHtml(slug)}” section">${label}</a>`
+    )
+  }
+
+  return `<a class="md-a" href="${safeHref(href)}" target="_blank" rel="noreferrer noopener">${label}</a>`
+}
 
 /**
  * Inline rules, applied to already-escaped text.
@@ -49,7 +125,7 @@ function inline(escaped: string): string {
       `<img class="md-img" src="${safeHref(src)}" alt="${alt}" loading="lazy">`,
     )
     .replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (_m, label: string, href: string) =>
-      `<a class="md-a" href="${safeHref(href)}" target="_blank" rel="noreferrer noopener">${label}</a>`,
+      renderLink(label, href),
     )
     // `[\s\S]+?` rather than `[^*]+`: bold legitimately wraps italic —
     // `**absent *and* on it rejecting**` appears in v-copy's README — and a
@@ -167,7 +243,16 @@ export function renderMarkdown(source: string): string {
     if (heading) {
       closeList()
       const level = heading[1].length
-      out.push(`<h${level} class="md-h md-h${level}">${inline(escapeHtml(heading[2]))}</h${level}>`)
+      // The id is what a `#section` link in the same README lands on, and
+      // `headingSlug` is GitHub's rule so it is the *same* id npm resolves. The
+      // closing `#`s of a setext-style ATX heading are not part of the slug
+      // (GFM), but they are left in the visible label, which is what this
+      // renderer has always shown.
+      const slug = headingSlug(heading[2])
+      out.push(
+        `<h${level} class="md-h md-h${level}" id="${escapeHtml(slug)}">` +
+          `${inline(escapeHtml(heading[2]))}</h${level}>`,
+      )
       index++
       continue
     }
