@@ -5,7 +5,7 @@ const manifest: LibraryManifest = {
   pkg: '@ozjsey/v-fit-children',
   tagline:
     'Hide the children that do not fit on one row and hand you the ones you lost — count, elements, indices, and the matching data objects — so a "+N more" badge is three lines instead of a resize-observer project.',
-  status: 'Published — 2.2.0 on npm (owner ozjsey); 2.3.0 built locally, not yet published',
+  status: 'Published — 2.3.0 on npm (owner ozjsey), verified against registry.npmjs.org 2026-09-17; 2.3.1 built locally, not yet published',
   notes: [
     'No ghost element, no IntersectionObserver, no requestAnimationFrame. One ResizeObserver watches five things — the host, the width-restricting container, the host\'s parent, every sibling and every child — because a "+N" badge growing beside a shrink-to-fit host changes none of the first three. Vue-rendered child changes arrive through the directive\'s own updated hook, and a MutationObserver catches children injected outside Vue. All of it runs before the browser paints, so nothing is ever shown mid-recalculation.',
     'The real children are measured in place, once per pass, with everything the directive hid shown first — a display:none child measures zero, which is exactly what the old ghost existed to route around. Spacing comes from where the browser actually put each child, so CSS gap and sibling margins are one number.',
@@ -81,6 +81,13 @@ const manifest: LibraryManifest = {
       blurb:
         'Every chip is pinned, so the visible set never moves. Drag the width down: the event and data-v-fit-state have to agree.',
       tags: ['isOverflowing', 'data-v-fit-keep', 'data-v-fit-state'],
+    },
+    {
+      file: '12-host-resize.vue',
+      title: 'The host alone is resized, down and back',
+      blurb:
+        'A sidebar, a splitter, a class toggle — the host narrows while its parent and siblings hold still. Every chip has to come back at the width they all fitted at; through 2.3.0 they did not (FIT-2).',
+      tags: ['bare binding', 'ResizeObserver', 'data-v-fit-state'],
     },
   ],
 }

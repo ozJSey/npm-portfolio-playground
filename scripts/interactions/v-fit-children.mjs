@@ -36,6 +36,14 @@
  *
  * 2.2.0 is what `node_modules` holds, and the five F1/F2/quality-1 checks fail
  * there while the rest pass.
+ *
+ * FIT-2's two checks (card 12) have their own control, against the artifact that
+ * is on npm right now rather than the one before it:
+ *
+ *   pnpm interactions:dist                  # dist/ is byte-identical to 2.3.0
+ *
+ * Both fail there — the row comes back holding 3 of 9 chips with
+ * `data-v-fit-state="fits"` written over it.
  */
 
 const PRELUDE = `
@@ -445,6 +453,60 @@ export default {
         }
       },
     },
+    // ── FIT-2 ─────────────────────────────────────────────────────────
+    {
+      demo: '12-host-resize.vue',
+      name: 'FIT-2: the host alone narrows and returns — every chip comes back',
+      fn: async () => {
+        // The slider writes an inline width on the DIRECTIVE ELEMENT. Its frame
+        // is a fixed 640px and it has no siblings, so the only ResizeObserver
+        // entry this card can produce is the host's own — which through 2.3.0
+        // was the one trigger that never retracted `oversizedRuns`.
+        const file = '12-host-resize.vue'
+        await __fit.width(file, 600)
+        const wide = __fit.visible(file).length
+
+        const rows = []
+        for (const narrow of [200, 300, 240, 180]) {
+          await __fit.width(file, narrow)
+          const hid = __fit.visible(file).length
+          await __fit.width(file, 600)
+          rows.push({ narrow, hid, back: __fit.visible(file).length })
+        }
+
+        const frozen = rows.filter((r) => r.back !== wide)
+        // Negative control: a round trip that never hid anything comes back by
+        // doing nothing at all, and would pass for the wrong reason.
+        const reallyHid = rows.every((r) => r.hid < wide)
+        return {
+          pass: wide === 9 && reallyHid && frozen.length === 0,
+          detail: `${wide} chips at 600px; ${rows.map((r) => r.narrow + 'px->' + r.hid + ' back->' + r.back).join(' ')}${reallyHid ? '' : ' — A ROUND TRIP NEVER HID ANYTHING'}${frozen.length ? ' — FROZEN at ' + frozen.map((r) => r.narrow).join(',') : ''}`,
+        }
+      },
+    },
+    {
+      demo: '12-host-resize.vue',
+      name: 'FIT-2: the state attribute never reads "fits" over a row that is hiding chips',
+      fn: async () => {
+        // The contradiction is the symptom that makes this a P0 rather than a
+        // layout nit: CSS says the row is fine, the event says nothing is
+        // overflowing, and six of nine chips are gone.
+        const file = '12-host-resize.vue'
+        const seen = []
+        for (const px of [600, 200, 600, 340, 600, 140, 600]) {
+          await __fit.width(file, px)
+          seen.push({ px, attribute: __fit.state(file), hidden: __fit.hiddenCount(file) })
+        }
+        const lying = seen.filter((s) => s.attribute === 'fits' && s.hidden > 0)
+        const sawBoth =
+          seen.some((s) => s.hidden === 0) && seen.some((s) => s.hidden > 0)
+        return {
+          pass: lying.length === 0 && sawBoth,
+          detail: `${seen.map((s) => s.px + ':' + s.attribute + '/' + s.hidden + 'hidden').join(' ')}${sawBoth ? '' : ' — SWEEP NEVER CHANGED'}${lying.length ? ' — "fits" OVER A HIDDEN CHIP' : ''}`,
+        }
+      },
+    },
+
     {
       demo: '11-pinned-overflow.vue',
       name: 'control: a pinned row hides nothing at any width, so the visible set never moves',

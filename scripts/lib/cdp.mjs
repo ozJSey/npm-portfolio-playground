@@ -68,7 +68,23 @@ import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { EXIT_WEDGED, installExitCleanup, registerChild, startWatchdog } from './watchdog.mjs'
+import {
+  EXIT_WEDGED,
+  installExitCleanup,
+  registerChild,
+  registerProfileDir,
+  startWatchdog,
+  sweepStaleProfileDirs,
+} from './watchdog.mjs'
+
+/**
+ * The `mkdtempSync` prefix for the throwaway profile each launch gets, and the
+ * marker the PG-25 startup sweep recognises its own litter by. One constant,
+ * because "what we create" and "what we are allowed to delete" being two
+ * strings that merely look alike is how a sweep ends up deleting someone else's
+ * directory — or, quieter, none of its own.
+ */
+const PROFILE_PREFIX = 'dz-cdp-'
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -195,7 +211,14 @@ export async function launchChrome({
   // 14-minute hang left an orphan Chrome holding its profile directory until it
   // was killed by hand; `installExitCleanup` is what makes Ctrl-C enough.
   installExitCleanup()
-  const userDataDir = mkdtempSync(join(tmpdir(), 'dz-cdp-'))
+  // PG-25. Two halves of one leak. The directory below is registered so the
+  // teardown deletes it after the browser is dead, and the sweep collects what
+  // an earlier run could not: a `kill -9` of node runs no exit handler at all.
+  // 28 directories and 1.5 GB had accumulated under $TMPDIR before either
+  // existed, and not only from runs that went wrong — a `pnpm deeplinks` that
+  // passed 316/316 left one behind too.
+  sweepStaleProfileDirs(PROFILE_PREFIX)
+  const userDataDir = registerProfileDir(mkdtempSync(join(tmpdir(), PROFILE_PREFIX)))
   const args = [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -245,7 +268,7 @@ export async function launchChrome({
         `at ${probeMs}ms, none answered /json/version.\n${log}`,
     )
   }
-  return { proc, wsUrl: version.webSocketDebuggerUrl, port }
+  return { proc, wsUrl: version.webSocketDebuggerUrl, port, userDataDir }
 }
 
 /**
@@ -841,7 +864,13 @@ export { sleep }
  *      makes `timeout: 0` no longer a way to reintroduce the original bug.
  *   4. no leak — after (2), the Chrome it launched and the stand-in dev server
  *      beside it are both gone. A timeout that orphans the processes it was
- *      meant to clean up has only moved the mess.
+ *      meant to clean up has only moved the mess. Its profile directory is
+ *      gone too, which is PG-25: the processes were always reaped, the profile
+ *      directory beside them never was.
+ *   5. profile directories (PG-25), the case the wedge does not cover, because
+ *      the leak was never about wedging: a run that ends *cleanly* removes its
+ *      own profile, a day-old one left by a `kill -9`'d run is swept at the
+ *      next launch, and one from a run still in flight is left alone.
  * ------------------------------------------------------------------------ */
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const { spawnSync } = await import('node:child_process')
@@ -877,7 +906,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     // Stand-in for the Vite server `interactions.mjs` spawns and this module
     // has no handle on. It has to die with the run all the same.
     const server = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], { stdio: 'ignore' })
-    console.log(`CHROME_PID=${chrome.proc.pid} SERVER_PID=${server.pid}`)
+    console.log(`CHROME_PID=${chrome.proc.pid} SERVER_PID=${server.pid} PROFILE=${chrome.userDataDir}`)
     await new Promise(() => {}) // the hang — outside send(), exactly as observed
   } else if (mode === 'overdue') {
     const chrome = await launchChrome({ port: await freePort() })
@@ -892,6 +921,26 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       { timeout: 0 },
     )
     console.log('NO-WATCHDOG — the unbounded command returned, which should be impossible')
+    process.exit(0)
+  } else if (mode === 'sweep') {
+    const { utimesSync, writeFileSync } = await import('node:fs')
+    /** A profile directory as a dead run would have left it, aged on demand. */
+    const plant = (ageMs) => {
+      const dir = mkdtempSync(join(tmpdir(), PROFILE_PREFIX))
+      // With a file in it, so that "swept" means the recursive walk ran rather
+      // than an `rmdir` of an empty directory succeeding by luck.
+      writeFileSync(join(dir, 'Preferences'), '{}')
+      const at = (Date.now() - ageMs) / 1000
+      utimesSync(dir, at, at) // after the write: writing to it touches the mtime
+      return dir
+    }
+    const stale = plant(25 * 60 * 60 * 1000)
+    const fresh = plant(0)
+    const chrome = await launchChrome({ port: await freePort() })
+    console.log(`STALE=${stale}\nFRESH=${fresh}\nMINE=${chrome.userDataDir}`)
+    // Exactly how every runner in scripts/ ends: SIGKILL the browser, exit 0.
+    // No wedge, no signal — the ordinary path that leaked 28 directories.
+    chrome.proc.kill('SIGKILL')
     process.exit(0)
   } else {
     const run = (m, env) =>
@@ -921,6 +970,7 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
     const w = run('stall', { CDP_STALL_MS: '3000' })
     const took = Date.now() - t0
     const pids = /CHROME_PID=(\d+) SERVER_PID=(\d+)/.exec(w.stdout ?? '')
+    const wedgedProfile = /PROFILE=(\S+)/.exec(w.stdout ?? '')?.[1]
     process.stdout.write(`${(w.stderr ?? '').trim()}\n`)
     const leaked = pids ? [Number(pids[1]), Number(pids[2])].filter(alive) : ['(no pids reported)']
     for (const [what, ok] of [
@@ -929,6 +979,12 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       ['said CDP STALL', /CDP STALL/.test(w.stderr ?? '')],
       ['named what it was last doing', /09-contenteditable\.vue/.test(w.stderr ?? '')],
       ['left no orphan Chrome or dev server', leaked.length === 0],
+      // PG-25. The stall report has always promised "nothing is left holding a
+      // port or a profile directory"; only the first half was ever true.
+      [
+        `left no orphan profile directory (${wedgedProfile ?? 'none reported'})`,
+        Boolean(wedgedProfile) && !existsSync(wedgedProfile),
+      ],
     ]) {
       console.log(`   ${ok ? 'ok  ' : 'FAIL'} ${what}`)
       if (!ok) fails.push(what)
@@ -948,10 +1004,29 @@ if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
       if (!ok) fails.push(what)
     }
 
+    console.log('\n4. profile directories — swept when stale, kept when live, removed on a clean exit\n')
+    const s = run('sweep')
+    process.stdout.write(`${(s.stdout ?? '').trim()}\n${(s.stderr ?? '').trim()}\n`)
+    const reported = (key) => new RegExp(`^${key}=(.+)$`, 'm').exec(s.stdout ?? '')?.[1]
+    const [stale, fresh, mine] = ['STALE', 'FRESH', 'MINE'].map(reported)
+    for (const [what, ok] of [
+      // Without this first claim every other one below passes on `undefined`,
+      // because `existsSync(undefined)` is false — a gate that cannot fail.
+      ['reported all three directories', Boolean(stale && fresh && mine)],
+      ['swept the day-old profile at launch', Boolean(stale) && !existsSync(stale)],
+      ['left the profile of a live run alone', Boolean(fresh) && existsSync(fresh)],
+      ['removed its own profile on a CLEAN exit', Boolean(mine) && !existsSync(mine)],
+    ]) {
+      console.log(`   ${ok ? 'ok  ' : 'FAIL'} ${what}`)
+      if (!ok) fails.push(what)
+    }
+    const { rmSync } = await import('node:fs')
+    for (const dir of [stale, fresh, mine]) if (dir) rmSync(dir, { recursive: true, force: true })
+
     console.log(
       fails.length
         ? `\nFAIL — ${fails.length} claim(s) unproven: ${fails.join('; ')}`
-        : '\nPASS — every wait in this file is bounded, and a wedge is reported and cleaned up.',
+        : '\nPASS — every wait in this file is bounded, a wedge is reported, and nothing is left behind.',
     )
     process.exit(fails.length ? 1 : 0)
   }

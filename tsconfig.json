@@ -22,6 +22,10 @@
       // last-published .d.ts out of node_modules instead — so a card exercising
       // an API that is not on npm yet fails to compile while the page it renders
       // works perfectly. Add a line here when a tab starts using a new export.
+      // Added for BD-1: card 11 passes a separator config as the second
+      // argument (`bd("1.234,56", { decimal: ",", group: "." })`), which is
+      // 1.2.1 and not in the 1.2.0 `.d.ts` in node_modules.
+      "@ozjsey/bigdecimal-string": ["../bigdecimal-string/src/index.ts"],
       "@ozjsey/v-copy": ["../v-copy/vCopy.ts"],
       "@ozjsey/v-keyboard-navigation": ["../v-keyboard-navigation/vKeyboardNavigation.ts"],
       // Added for SIV-6: card 03 writes `container: paneRef.value`, whose type

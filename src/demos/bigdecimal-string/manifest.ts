@@ -6,12 +6,12 @@ const manifest: LibraryManifest = {
   tagline:
     'Exact decimal arithmetic on strings, backed by BigInt. Every card here is the same expression twice — plain JavaScript on the left, the library on the right — because "0.30" means nothing until it sits beside 0.30000000000000004.',
   status:
-    'Published — 1.1.0 on npm (@ozjsey/bigdecimal-string). 1.2.0 built locally and NOT published: 1.1.0 has no `import` condition, so ESM consumers cannot load it at all. 122 unit tests + 70 browser checks.',
+    'Published — 1.2.0 on npm (@ozjsey/bigdecimal-string), released 2026-09-14 per the registry. 1.2.1 is built locally and NOT published: it fixes operand scale, adds the separator standard, and guards negative scales and dangling exponents. 175 unit tests + 72 browser checks.',
   notes: [
     'Both columns are computed by this browser. Nothing on this tab is a printed literal: a hardcoded 0.30000000000000004 would be a claim ABOUT JavaScript rather than a demonstration of one, and it could rot without anybody noticing.',
-    'Three README sentences did not survive being computed live, and the cards that hit them say so on the card. 1e15 does not print as 1e+15 (doubles go exponential at 1e21, card 03). (1e21).toLocaleString() does not return "1e+21" on any engine with ICU (card 03). bd("1,234.56") does not strip the comma — it returns "1.234", and toFormat() output cannot be read back (card 11).',
+    'Two README sentences did not survive being computed live, and the cards that hit them say so on the card. 1e15 does not print as 1e+15 (doubles go exponential at 1e21, card 03). (1e21).toLocaleString() does not return "1e+21" on any engine with ICU (card 03). A third — bd("1,234.56") returning "1.234" — was a real defect rather than a wording problem, and 1.2.1 fixed it: grouped input is now read, validated rather than stripped, and toFormat() output reads back (card 11).',
     'Exactness starts at the literal. bd(0.1 + 0.2) is handed 0.30000000000000004 and keeps it faithfully, which is why every example here quotes its operands as strings.',
-    'Two README claims are not demonstrable in a browser and have no card: "Native TypeScript" (a build-time property — the .d.ts ships in the tarball) and "Zero dependencies, ~6KB minified" (the ESM build measures 5,625 bytes).',
+    'Two README claims are not demonstrable in a browser and have no card: "Native TypeScript" (a build-time property — the .d.ts ships in the tarball) and "Zero dependencies, 8.1 KB minified" (the 1.2.1 ESM build measures 8,109 bytes; 1.2.0 was 5,625).',
   ],
   demos: [
     {
@@ -86,10 +86,10 @@ const manifest: LibraryManifest = {
     },
     {
       file: '11-parsing.vue',
-      title: 'Creating instances — and the comma that is not stripped',
+      title: 'Creating instances — and the separator standard',
       blurb:
-        'String, scientific, number, explicit precision. Then the documented "commas are stripped" claim, which returns 1.234.',
-      tags: ['bd(value, precision)', 'scientific input', 'README drift', 'round trip'],
+        'String, scientific, number, explicit precision. Then grouped input, the round trip through toFormat(), the ambiguous string that is refused rather than guessed at, and the flipped dialect.',
+      tags: ['bd(value, precision)', 'bd(value, config)', 'separators', 'round trip', 'validated grouping'],
     },
   ],
 }

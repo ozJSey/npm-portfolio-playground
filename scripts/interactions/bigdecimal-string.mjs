@@ -241,12 +241,15 @@ const CLAIMS = {
     'from-number': ['123.45', '123.45'],
     'precision-3': ['123.456', '123.456'],
     'precision-4': ['100.0000', '100.0000'],
-    // Documented as "commas are stripped". They are not: the parser splits on
-    // the comma and returns 1.234. If this check ever goes red because the
-    // library started answering 1234.56, that is the FIX landing — update the
-    // card's warning, the manifest note and the README in the same run.
-    commas: ['1', '1.234'],
-    'round-trip': ['1', '1.234'],
+    // BD-1 (1.2.1) landed the fix these two rows used to document as a defect:
+    // grouped input is READ, and toFormat() output reads back. parseFloat still
+    // stops at the comma and answers 1, which is why the row stays on the card.
+    commas: ['1', '1234.56'],
+    'round-trip': ['1', '1234567.89'],
+    // Grouping is validated, not stripped: "1,23" is refused rather than read
+    // as 123. The library column is the throw itself.
+    ambiguous: ['1', 'throws SyntaxError'],
+    'eu-dialect': ['1.234', '1234.56'],
   },
 }
 
@@ -352,17 +355,21 @@ CHECKS.push({
 
 CHECKS.push({
   demo: '11-parsing.vue',
-  name: 'the comma defect is flagged on the card, visibly',
+  name: 'the separator standard is stated on the card, visibly',
   fn: () => {
     const warnings = [...__pg.stage('11-parsing.vue').querySelectorAll('[data-role="claim-warning"]')]
     if (warnings.length !== 2) return { pass: false, detail: 'expected 2 warnings, found ' + warnings.length }
     const verdicts = warnings.map((w) => __bd.visible(w))
     const bad = verdicts.filter((v) => !v.ok)
     if (bad.length) return { pass: false, detail: 'a warning is not visible — ' + bad.map((b) => b.why).join('; ') }
-    const mentions = verdicts.every((v) => /comma|grouped/i.test(v.text))
+    const mentions = verdicts.every((v) => /comma|group/i.test(v.text))
+    const namesTheThrow = verdicts.some((v) => /SyntaxError/.test(v.text))
     return {
-      pass: mentions,
-      detail: mentions ? verdicts.map((v) => v.box).join(' and ') : 'the warnings no longer name the defect',
+      pass: mentions && namesTheThrow,
+      detail:
+        mentions && namesTheThrow
+          ? verdicts.map((v) => v.box).join(' and ')
+          : 'the warnings no longer state the standard (or no longer show the refusal)',
     }
   },
 })

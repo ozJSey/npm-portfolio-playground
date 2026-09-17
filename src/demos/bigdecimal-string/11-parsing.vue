@@ -3,14 +3,35 @@ import { bd } from '@ozjsey/bigdecimal-string'
 
 /**
  * The README's "Creating Instances" section: from a string, from scientific
- * notation, from a number, and with an explicit precision.
+ * notation, from a number, with an explicit precision — and then the separator
+ * standard.
  *
- * The last two rows are the reason this card exists. The README says
- * `bd("1,234.56")` strips the comma. Computed live, it does not — and because
- * `toFormat()` produces exactly that shape, the library cannot read its own
- * output back.
+ * The last four rows are the reason this card exists. Through 1.2.0 the parser
+ * split on /[.,]/ and kept the first two segments, so `bd("1,234.56")` was
+ * 1.234 and the library could not read its own `toFormat()` output back. 1.2.1
+ * reads grouped input properly and REFUSES anything ambiguous rather than
+ * guessing, which is the row plain JavaScript still gets silently wrong.
  */
 const FORMATTED = bd('1234567.89').toFormat()
+
+/** Rows that demonstrate a throw need the throw, not a blank cell. */
+const attempt = (run: () => string) => {
+  try {
+    return run()
+  } catch (error) {
+    return `throws ${(error as Error).constructor.name}`
+  }
+}
+
+/** The refusal in full — the message is the feature, not the throw. */
+const AMBIGUOUS_MESSAGE = (() => {
+  try {
+    bd('1,23')
+    return 'no error — the refusal has been lost'
+  } catch (error) {
+    return `${(error as Error).constructor.name}: ${(error as Error).message}`
+  }
+})()
 
 const rows = [
   {
@@ -45,19 +66,30 @@ const rows = [
   },
   {
     claim: 'commas',
-    expr: 'bd("1,234.56")   // README: "Commas are stripped"',
+    expr: 'bd("1,234.56")   // grouped input, default standard',
     native: String(parseFloat('1,234.56')),
     library: bd('1,234.56').toString(),
     warn:
-      'Neither side is 1234.56. parseFloat stops at the comma and returns 1; the library splits on it and returns 1.234. The comma is NOT stripped — this README line is wrong, and it is wrong in the direction that silently corrupts a value instead of throwing.',
+      'The library reads the grouping; parseFloat stops at the comma and returns 1 without complaining. Through 1.2.0 the library answered 1.234 here, which was the same silent corruption from the other side.',
   },
   {
     claim: 'round-trip',
     expr: `bd(bd("1234567.89").toFormat())   // "${FORMATTED}" back in`,
     native: String(parseFloat(FORMATTED)),
     library: bd(FORMATTED).toString(),
-    warn:
-      'Same defect, from the other end: toFormat() emits grouped digits and bd() cannot read them. Format on the way out only, and keep the unformatted string as the value.',
+  },
+  {
+    claim: 'ambiguous',
+    expr: 'bd("1,23")   // 1.23, or malformed grouping?',
+    native: String(parseFloat('1,23')),
+    library: attempt(() => bd('1,23').toString()),
+    warn: `Grouping is validated, never stripped: reading "1,23" as 123 would corrupt a European 1.23, so it is refused — ${AMBIGUOUS_MESSAGE}`,
+  },
+  {
+    claim: 'eu-dialect',
+    expr: 'bd("1.234,56", { decimal: ",", group: "." })',
+    native: String(parseFloat('1.234,56')),
+    library: bd('1.234,56', { decimal: ',', group: '.' }).toString(),
   },
 ]
 </script>
@@ -80,15 +112,18 @@ const rows = [
 
   <p class="pg-muted">
     The scale is inferred from the digits you write and never goes below 2:
-    <code>bd("123.456")</code> keeps three, <code>bd("100")</code> gets two, and the second argument
-    overrides both. Pass a precision smaller than the input and the extra digits are rounded away at
-    construction, not kept in reserve.
+    <code>bd("123.456")</code> keeps three, <code>bd("100")</code> gets two, and a numeric second
+    argument overrides both. An object second argument is a separator config instead —
+    <code>{ decimal, group }</code>, defaulting to <code>"."</code> and <code>","</code>, settable
+    app-wide with <code>BigDecimal.setConfig()</code>. The same pair is used on the way out, which is
+    why the round-trip row works.
   </p>
 </template>
 
 <style scoped>
-/* Part of what this card demonstrates: a documented claim the live values
-   contradict is flagged on the card rather than quietly left standing. */
+/* Part of what this card demonstrates: where one of the two columns is wrong,
+   or where an input is refused on purpose, the card says so rather than
+   leaving the reader to guess which number to believe. */
 .claim-warn {
   margin: 0.35rem 0 0;
   padding: 0.35rem 0.55rem;
