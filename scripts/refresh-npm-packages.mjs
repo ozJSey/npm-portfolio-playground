@@ -28,6 +28,16 @@ await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
 
 let groups = await readFile(groupsPath, 'utf8')
 for (const [name, version] of Object.entries(packageJson.dependencies)) {
-  groups = groups.replace(new RegExp(`(\\s+["']?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']?:\\s*")[^\\n]+`), `$1${version}`)
+  // The capture used to end at the OPENING quote and `[^\n]+` then ate the rest
+  // of the line — the closing quote included — so `$1${version}` wrote
+  // `"@ozjsey/v-copy": "1.2.0` and left every value unterminated. The file is
+  // read by `dependency-grouper generate` behind `|| exit 0`, so it failed
+  // silently on every install and the groups froze at whatever they said the
+  // day it broke. Match the quotes explicitly and write both back.
+  const key = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  groups = groups.replace(
+    new RegExp(`(\\s+["']?${key}["']?:\\s*)(["'])[^"'\\n]*\\2`),
+    `$1$2${version}$2`,
+  )
 }
 await writeFile(groupsPath, groups)
