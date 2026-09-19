@@ -452,19 +452,32 @@ const CHECKS = [
     name: 'B4: focus() before the directive moves the resting position away from the one asked for',
     fn: async () => {
       const file = '14-focus.vue'
+      // Read the numbers by NAME. The readout used to carry one number, so the
+      // spec took `nums()[0]`; it now reports where focus() landed the target
+      // as well as where it came to rest, and a positional read silently
+      // compared the wrong pair.
+      const resting = (t) => Number(/resting (-?\d+)/.exec(t)?.[1])
+      const landed = (t) => Number(/landed it at (-?\d+)/.exec(t)?.[1])
+
       __siv.select(file, 'order', 'none')
       await __siv.sleep(150)
       __siv.button(file, 'Run').click()
-      const alone = __siv.nums(await __siv.settled(file))[0]
+      const alone = resting(await __siv.settled(file))
 
       __siv.select(file, 'order', 'focus')
       await __siv.sleep(150)
       __siv.button(file, 'Run').click()
-      const focused = __siv.nums(await __siv.settled(file))[0]
+      const focusText = await __siv.settled(file)
+      const focused = resting(focusText)
 
+      // Stricter than "they disagree": the claim is that the directive leaves
+      // the browser's landing alone, so the resting position must BE the one
+      // focus() produced, not merely some other number.
       return {
-        pass: Math.abs(alone - focused) > 20,
-        detail: `directive alone top ${alone}, after focus() top ${focused} — they must disagree`,
+        pass: Math.abs(alone - focused) > 20 && focused === landed(focusText),
+        detail:
+          `directive alone rests at ${alone}; focus() landed it at ${landed(focusText)} and it ` +
+          `rested at ${focused} — these must disagree, and the resting one must be the browser's`,
       }
     },
   },
@@ -473,20 +486,22 @@ const CHECKS = [
     name: 'B4 remedy: focus({ preventScroll: true }) lands exactly where the directive alone does',
     fn: async () => {
       const file = '14-focus.vue'
+      const resting = (t) => Number(/resting (-?\d+)/.exec(t)?.[1])
+
       __siv.select(file, 'order', 'none')
       await __siv.sleep(150)
       __siv.button(file, 'Run').click()
-      const alone = __siv.nums(await __siv.settled(file))[0]
+      const alone = resting(await __siv.settled(file))
 
       __siv.select(file, 'order', 'prevent')
       await __siv.sleep(150)
       __siv.button(file, 'Run').click()
       const text = await __siv.settled(file)
-      const prevented = __siv.nums(text)[0]
+      const prevented = resting(text)
 
       return {
         pass: Math.abs(alone - prevented) <= 2 && text.indexOf('focused true') !== -1,
-        detail: `directive alone top ${alone}, preventScroll top ${prevented} — readout "${text}"`,
+        detail: `directive alone rests at ${alone}, preventScroll rests at ${prevented} — readout "${text}"`,
       }
     },
   },
@@ -835,12 +850,15 @@ const CHECKS = [
       __siv.select(file, 'inline', 'nearest')
       __siv.select(file, 'block', 'start')
       await __siv.sleep(120)
-      __siv.button(file, 'Scroll both, vertically only').click()
+      __siv.button(file, 'Park sideways, then scroll vertically only').click()
       const text = await __siv.settled(file, 'live')
-      const [from, lib, nat] = __siv.nums(text)
+      const [from, lib, nat, moved] = __siv.nums(text)
+      // `moved` is reported by the card rather than derived here on purpose: it
+      // is the one number a reader can check against the rail with their own
+      // eyes, so the gate asserts the same value the card is showing them.
       return {
-        pass: from > 100 && lib === from && lib === nat,
-        detail: `readout "${text}" — started at ${from}, so both panes must still be there`,
+        pass: from > 100 && lib === from && lib === nat && moved === 0,
+        detail: `readout "${text}" — parked at ${from}, so both panes must still be there and moved must be 0`,
       }
     },
   },

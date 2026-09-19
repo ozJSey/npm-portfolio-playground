@@ -89,42 +89,52 @@ async function measure(from: number): Promise<Row> {
   }
 }
 
+/**
+ * `requestAnimationFrame` does not fire in a hidden tab, so a sweep started and
+ * then backgrounded parks forever inside `measure()`. Without a `finally` the
+ * `running` flag stays true and every control on the card is disabled for good
+ * — the card is dead until a reload, with no indication why. Observed, not
+ * theorised: `document.visibilityState === 'hidden'` and rAF silent past 1.5s.
+ */
 async function run(): Promise<void> {
   if (running.value) return
   running.value = true
-  failures.value = []
-  const bad: Row[] = []
-  let n = 0
-  const blocks: ScrollLogicalPosition[] = ['start', 'center', 'end', 'nearest']
-  const total = 3 * 2 * 2 * 2 * blocks.length * 2
-  for (const b of [0, 1, 10]) {
-    for (const p of [0, 20]) {
-      for (const s of [40, 400]) {
-        for (const g of [0, 60]) {
-          for (const bl of blocks) {
-            for (const f of [0, 3000]) {
-              border.value = b
-              padding.value = p
-              size.value = s
-              gap.value = g
-              block.value = bl
-              await nextTick()
-              const row = await measure(f)
-              n++
-              if (row.lib !== row.nat && !row.byDesign) bad.push(row)
-              if (n % 8 === 0) progress.value = `${n}/${total}…`
+  try {
+    failures.value = []
+    const bad: Row[] = []
+    let n = 0
+    const blocks: ScrollLogicalPosition[] = ['start', 'center', 'end', 'nearest']
+    const total = 3 * 2 * 2 * 2 * blocks.length * 2
+    for (const b of [0, 1, 10]) {
+      for (const p of [0, 20]) {
+        for (const s of [40, 400]) {
+          for (const g of [0, 60]) {
+            for (const bl of blocks) {
+              for (const f of [0, 3000]) {
+                border.value = b
+                padding.value = p
+                size.value = s
+                gap.value = g
+                block.value = bl
+                await nextTick()
+                const row = await measure(f)
+                n++
+                if (row.lib !== row.nat && !row.byDesign) bad.push(row)
+                if (n % 8 === 0) progress.value = `${n}/${total}…`
+              }
             }
           }
         }
       }
     }
+    failures.value = bad
+    progress.value = `${n}/${total} rows`
+    summary.value = bad.length
+      ? `${bad.length} of ${n} rows disagree with native`
+      : `all ${n} rows land on the same pixel as native`
+  } finally {
+    running.value = false
   }
-  failures.value = bad
-  progress.value = `${n}/${total} rows`
-  summary.value = bad.length
-    ? `${bad.length} of ${n} rows disagree with native`
-    : `all ${n} rows land on the same pixel as native`
-  running.value = false
 }
 </script>
 
@@ -151,7 +161,17 @@ async function run(): Promise<void> {
     </tbody>
   </table>
 
-  <div class="panes">
+  <!--
+    The sweep moves both rails once per row. Watching that happen is not the
+    point of the card and it made the page unreadable: measured at 192 rows,
+    the rails changed scroll position on 173 of 195 samples across 19.5
+    seconds of continuous thrash. The numbers are the evidence, so the rails
+    step aside while they are being collected. The controls above still drive
+    one configuration at a time, at normal speed, fully visible.
+  -->
+  <div class="panes-wrap">
+    <p v-if="running" class="veil-note">measuring {{ progress }}</p>
+    <div class="panes" :class="{ measuring: running }">
     <div>
       <p class="pg-kv cap">directive · container</p>
       <div ref="libPane" class="sweep" :style="{ borderWidth: border + 'px', padding: padding + 'px' }">
@@ -181,6 +201,7 @@ async function run(): Promise<void> {
         </div>
         <div v-for="i in TRAILING" :key="`t${i}`" class="cell">{{ i + LEADING }}</div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -257,5 +278,31 @@ async function run(): Promise<void> {
   border: 1px solid #e3e8f0;
   padding: 0.15rem 0.4rem;
   text-align: right;
+}
+
+.panes-wrap {
+  position: relative;
+}
+/*
+  Not `visibility: hidden` and not `display: none`: this library reads layout,
+  and one of its documented behaviours is what it does with a hidden target
+  (card 11). Opacity changes nothing the geometry can see, so the sweep it is
+  concealing still measures exactly what it would measure in full view.
+*/
+.panes.measuring {
+  opacity: 0.06;
+  pointer-events: none;
+}
+.veil-note {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
 }
 </style>

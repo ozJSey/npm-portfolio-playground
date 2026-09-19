@@ -128,59 +128,80 @@ async function measure(axis: 'inline' | 'vertical-only', from: number): Promise<
   }
 }
 
+/**
+ * `requestAnimationFrame` does not fire in a hidden tab, so a sweep started and
+ * then backgrounded parks forever inside `measure()`. Without a `finally` the
+ * `running` flag stays true and every control on the card is disabled for good
+ * — the card is dead until a reload, with no indication why. Observed, not
+ * theorised: `document.visibilityState === 'hidden'` and rAF silent past 1.5s.
+ */
 async function runOne(axis: 'inline' | 'vertical-only'): Promise<void> {
   if (running.value) return
   running.value = true
-  live.value = 'scrolling…'
-  const row = await measure(axis, 0)
-  live.value = `from ${row.from} · lib ${row.lib} · native ${row.nat} · Δ ${row.lib - row.nat}`
-  running.value = false
+  try {
+    live.value = 'scrolling…'
+    const row = await measure(axis, 0)
+    // The vertical-only run parks the rail mid-way on purpose before it starts,
+    // so the horizontal axis has somewhere to be wrongly moved FROM. Without
+    // saying so, that setup jump is the most visible thing on the card and reads
+    // as the directive scrolling sideways — which is the opposite of what the
+    // row proves. State the before and after instead of only the delta.
+    live.value =
+      axis === 'vertical-only'
+        ? `parked at ${row.from} · lib ${row.lib} · native ${row.nat} · moved ${row.lib - row.from}`
+        : `from ${row.from} · lib ${row.lib} · native ${row.nat} · Δ ${row.lib - row.nat}`
+  } finally {
+    running.value = false
+  }
 }
 
 async function run(): Promise<void> {
   if (running.value) return
   running.value = true
-  failures.value = []
-  const bad: Row[] = []
-  let n = 0
-  const dirs: Dir[] = ['ltr', 'rtl']
-  const aligns: ScrollLogicalPosition[] = ['start', 'center', 'end', 'nearest']
-  const total = 2 * 2 * (aligns.length * 2 + 1)
+  try {
+    failures.value = []
+    const bad: Row[] = []
+    let n = 0
+    const dirs: Dir[] = ['ltr', 'rtl']
+    const aligns: ScrollLogicalPosition[] = ['start', 'center', 'end', 'nearest']
+    const total = 2 * 2 * (aligns.length * 2 + 1)
 
-  for (const pd of dirs) {
-    for (const td of dirs) {
-      paneDir.value = pd
-      targetDir.value = td
-      // The inline axis, from both ends of the rail.
-      block.value = 'nearest'
-      for (const a of aligns) {
-        for (const from of [0, pd === 'rtl' ? -9999 : 9999]) {
-          inline.value = a
-          await nextTick()
-          const row = await measure('inline', from)
-          n++
-          if (row.lib !== row.nat) bad.push(row)
-          progress.value = `${n}/${total}…`
+    for (const pd of dirs) {
+      for (const td of dirs) {
+        paneDir.value = pd
+        targetDir.value = td
+        // The inline axis, from both ends of the rail.
+        block.value = 'nearest'
+        for (const a of aligns) {
+          for (const from of [0, pd === 'rtl' ? -9999 : 9999]) {
+            inline.value = a
+            await nextTick()
+            const row = await measure('inline', from)
+            n++
+            if (row.lib !== row.nat) bad.push(row)
+            progress.value = `${n}/${total}…`
+          }
         }
+        // And the row that carries the regression half.
+        inline.value = 'nearest'
+        block.value = 'start'
+        await nextTick()
+        const row = await measure('vertical-only', 0)
+        n++
+        if (row.lib !== row.nat || row.lib !== row.from) bad.push(row)
+        progress.value = `${n}/${total}…`
       }
-      // And the row that carries the regression half.
-      inline.value = 'nearest'
-      block.value = 'start'
-      await nextTick()
-      const row = await measure('vertical-only', 0)
-      n++
-      if (row.lib !== row.nat || row.lib !== row.from) bad.push(row)
-      progress.value = `${n}/${total}…`
     }
-  }
 
-  block.value = 'nearest'
-  failures.value = bad
-  progress.value = `${n}/${total} rows`
-  summary.value = bad.length
-    ? `${bad.length} of ${n} rows disagree with native`
-    : `all ${n} rows land on native's pixel, both directions, both axes`
-  running.value = false
+    block.value = 'nearest'
+    failures.value = bad
+    progress.value = `${n}/${total} rows`
+    summary.value = bad.length
+      ? `${bad.length} of ${n} rows disagree with native`
+      : `all ${n} rows land on native's pixel, both directions, both axes`
+  } finally {
+    running.value = false
+  }
 }
 </script>
 
@@ -223,7 +244,7 @@ async function run(): Promise<void> {
   <div class="pg-row" style="margin-bottom: 0.6rem">
     <button class="pg-btn" :disabled="running" @click="runOne('inline')">Scroll both</button>
     <button class="pg-btn" :disabled="running" @click="runOne('vertical-only')">
-      Scroll both, vertically only
+      Park sideways, then scroll vertically only
     </button>
     <span class="pg-kv live">{{ live }}</span>
   </div>
@@ -249,7 +270,17 @@ async function run(): Promise<void> {
     </tbody>
   </table>
 
-  <div class="panes">
+  <!--
+    The sweep moves both rails once per row. Watching that happen is not the
+    point of the card and it made the page unreadable: measured at 192 rows,
+    the rails changed scroll position on 173 of 195 samples across 19.5
+    seconds of continuous thrash. The numbers are the evidence, so the rails
+    step aside while they are being collected. The controls above still drive
+    one configuration at a time, at normal speed, fully visible.
+  -->
+  <div class="panes-wrap">
+    <p v-if="running" class="veil-note">measuring {{ progress }}</p>
+    <div class="panes" :class="{ measuring: running }">
     <div>
       <p class="pg-kv cap">directive · container</p>
       <div ref="libPane" class="rail" :style="{ direction: paneDir }">
@@ -275,6 +306,7 @@ async function run(): Promise<void> {
         </div>
         <div v-for="i in AFTER" :key="`a${i}`" class="cell">{{ i + AT }}</div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -362,5 +394,31 @@ async function run(): Promise<void> {
   border: 1px solid #e3e8f0;
   padding: 0.15rem 0.4rem;
   text-align: right;
+}
+
+.panes-wrap {
+  position: relative;
+}
+/*
+  Not `visibility: hidden` and not `display: none`: this library reads layout,
+  and one of its documented behaviours is what it does with a hidden target
+  (card 11). Opacity changes nothing the geometry can see, so the sweep it is
+  concealing still measures exactly what it would measure in full view.
+*/
+.panes.measuring {
+  opacity: 0.06;
+  pointer-events: none;
+}
+.veil-note {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
 }
 </style>

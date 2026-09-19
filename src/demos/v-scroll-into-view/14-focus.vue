@@ -20,24 +20,54 @@ function options(): VScrollIntoViewOptions {
   }
 }
 
-function run(): void {
+const frame = (): Promise<void> => new Promise((r) => requestAnimationFrame(() => r()))
+
+/**
+ * Order is the whole point of this card, so it is spelled out rather than
+ * implied.
+ *
+ * The first version flipped the condition and called `focus()` inside the same
+ * `requestAnimationFrame` callback. That reads like "focus first", but it is
+ * not: the directive's scroll had already been queued by the flip, and it ran
+ * last and won. All three modes rested on the same pixel — 157 — so the card
+ * showed a difference of zero while the prose underneath it claimed tens of
+ * pixels. Measured on the published 1.3.3 artifact, on the live site.
+ *
+ * The browser's focus scroll has to land *before* the directive's frame, so
+ * `focus()` now happens on its own frame and the condition flips on the next
+ * one. Then the numbers separate, and they separate for the documented reason:
+ * the directive finds the target already visible and `block: 'nearest'`
+ * correctly leaves it alone, so the resting position is whatever the browser
+ * chose.
+ */
+async function run(): Promise<void> {
   const pane = paneRef.value
   const target = targetRef.value
   if (!pane || !target) return
-  pane.scrollTop = 0
+
+  const offsetInPane = (): number =>
+    Math.round(target.getBoundingClientRect().top - pane.getBoundingClientRect().top)
+
   go.value = false
+  pane.scrollTop = 0
+  target.blur()
   readout.value = 'scrolling…'
-  requestAnimationFrame(() => {
-    // The condition flip queues the directive's frame; the browser's own focus
-    // scroll happens synchronously, before that frame runs.
-    go.value = true
-    if (mode.value === 'focus') target.focus()
-    if (mode.value === 'prevent') target.focus({ preventScroll: true })
-    window.setTimeout(() => {
-      const top = Math.round(target.getBoundingClientRect().top - pane.getBoundingClientRect().top)
-      readout.value = `target top in pane ${top} · focused ${document.activeElement === target}`
-    }, 500)
-  })
+  await frame()
+
+  // Whatever the browser does on focus, it does here — a whole frame before
+  // the directive is asked for an opinion.
+  if (mode.value === 'focus') target.focus()
+  if (mode.value === 'prevent') target.focus({ preventScroll: true })
+  await frame()
+  const afterFocus = offsetInPane()
+
+  go.value = true
+  await frame()
+  await frame()
+  const resting = offsetInPane()
+
+  const moved = mode.value === 'none' ? 'no focus() call' : `focus() landed it at ${afterFocus}`
+  readout.value = `${moved} · resting ${resting} · focused ${document.activeElement === target}`
 }
 </script>
 
