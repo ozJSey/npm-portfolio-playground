@@ -38,6 +38,11 @@ jobs:
       # tab in one. Together about twenty seconds against a broken docs site.
       - run: pnpm markdown
       - run: pnpm docs:ci
+      # PG-26. Asserts every library reaches the BROWSER as ESM, under npm
+      # resolution. A stale CI-only alias sent the CJS build of
+      # bigdecimal-string to the browser and took eleven demos down on the
+      # live site; smoke passed throughout, because it aliases to source.
+      - run: pnpm modules
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -48,6 +48,11 @@ jobs:
       - run: pnpm build
       - run: pnpm docs:ci
       - run: pnpm tabs
+      # PG-26. Asserts every library reaches the BROWSER as ESM, under npm
+      # resolution. A stale CI-only alias sent the CJS build of
+      # bigdecimal-string to the browser and took eleven demos down on the
+      # live site; smoke passed throughout, because it aliases to source.
+      - run: pnpm modules
       - run: pnpm smoke
       - run: pnpm interactions
       - run: pnpm geometry

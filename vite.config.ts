@@ -196,11 +196,6 @@ export default defineConfig({
       // Exact match only — a string alias would also rewrite `vue/compiler-sfc`.
       { find: /^vue$/, replacement: pkg('./node_modules/vue/dist/vue.runtime.esm-bundler.js') },
       { find: '@', replacement: pkg('./src') },
-      // @ozjsey/bigdecimal-string@1.1.0 was published without an `import`
-      // condition; point Vite at its published ESM file until the next patch.
-      ...(process.env.GITHUB_ACTIONS
-        ? [{ find: /^@ozjsey\/bigdecimal-string$/, replacement: pkg('./node_modules/@ozjsey/bigdecimal-string/dist/index.min.js') }]
-        : []),
       ...LIBRARY_ALIASES,
     ],
     dedupe: ['vue', ...CODEMIRROR_FAMILY],

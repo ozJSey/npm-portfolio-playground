@@ -9,26 +9,26 @@ importers:
   .:
     dependencies:
       '@ozjsey/bigdecimal-string':
-        specifier: 1.2.1
-        version: 1.2.1
+        specifier: 1.2.2
+        version: 1.2.2
       '@ozjsey/dependency-grouper':
-        specifier: 0.3.6
-        version: 0.3.6
+        specifier: 0.3.7
+        version: 0.3.7
       '@ozjsey/v-copy':
         specifier: 1.2.2
         version: 1.2.2(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/v-dropzone':
-        specifier: 0.1.2
-        version: 0.1.2(vue@3.5.43(typescript@5.9.3))
+        specifier: 0.1.3
+        version: 0.1.3(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/v-fit-children':
-        specifier: 2.3.1
-        version: 2.3.1(vue@3.5.43(typescript@5.9.3))
+        specifier: 2.3.2
+        version: 2.3.2(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/v-keyboard-navigation':
-        specifier: 0.3.0
-        version: 0.3.0(vue@3.5.43(typescript@5.9.3))
+        specifier: 0.3.1
+        version: 0.3.1(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/v-observe':
-        specifier: 0.2.1
-        version: 0.2.1(vue@3.5.43(typescript@5.9.3))
+        specifier: 0.2.2
+        version: 0.2.2(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/v-scroll-into-view':
         specifier: 1.3.3
         version: 1.3.3(vue@3.5.43(typescript@5.9.3))
@@ -39,8 +39,8 @@ importers:
         specifier: 1.1.4
         version: 1.1.4(vue@3.5.43(typescript@5.9.3))
       '@ozjsey/vue-write-behind':
-        specifier: 0.2.0
-        version: 0.2.0(vue@3.5.43(typescript@5.9.3))
+        specifier: 0.2.1
+        version: 0.2.1(vue@3.5.43(typescript@5.9.3))
       vue:
         specifier: 3.5.43
         version: 3.5.43(typescript@5.9.3)
@@ -357,11 +357,11 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@ozjsey/bigdecimal-string@1.2.1':
-    resolution: {integrity: sha512-7KODAmnrtemMR71ypzU3K69lS0O4c3qdKa4bPVvJdk1U8AdzZre5TU3/8c1S2u5NZLyoV+FaD1/Twh+PETMI8w==}
+  '@ozjsey/bigdecimal-string@1.2.2':
+    resolution: {integrity: sha512-19EnCgz2NBWbn8cwUcvo+Sw9PayWpzFxtdP4EY+6Sus1MMJkrL+yfDFpEqAjuo9j7ORqTwGT0m1WEAZ1Tol6zA==}
 
-  '@ozjsey/dependency-grouper@0.3.6':
-    resolution: {integrity: sha512-SYv/kXkoPBNZ0D7U5vHpgdo3+sKhR2JmDIxBs4wH1CphZU3js8saDfH9CN5lMsYqw1MEo3VrDREwpRKyhJU3jQ==}
+  '@ozjsey/dependency-grouper@0.3.7':
+    resolution: {integrity: sha512-s/4yCveO2D2RS8mRo/4PieNjWq+ypQ37zm3GpmCHDu5L0xVkc1OWQSHaAUvZ4FqJE83hpcBxPwaZl+HYN+11gg==}
     engines: {node: '>=16.0.0'}
     hasBin: true
 
@@ -370,23 +370,23 @@ packages:
     peerDependencies:
       vue: ^3.0.0
 
-  '@ozjsey/v-dropzone@0.1.2':
-    resolution: {integrity: sha512-zUieTFCKRkQnNMWixvOeQnYBJk95ScqDUtK/cpszrP11R5LbTa1TBCuN2n+So/qzGMLb03akLzUcsmi79+zsrw==}
+  '@ozjsey/v-dropzone@0.1.3':
+    resolution: {integrity: sha512-oj3Xt8k5mxJwju8lM5BhdZklAJPOnGiLhCjkKtUEGIlQwx5/dVxQFJyq+oGYMLr5irj51FC/wUlxx6rROg8L7w==}
     peerDependencies:
       vue: ^3.0.0
 
-  '@ozjsey/v-fit-children@2.3.1':
-    resolution: {integrity: sha512-N9PYBjTD6bZBwqIAHLtsJSwOJ8tEKF420L+zQu29jSGWW7QXLusClXCRqZejH2rxqRYZztgFTIFkFYT1WZYJ/g==}
+  '@ozjsey/v-fit-children@2.3.2':
+    resolution: {integrity: sha512-xp7jDRTSclZbDgNu7qpLF4oHh0IrxyRsxe4KbIxSdPfb4T2hViDEyFJTSIweB1OdMfqrbaywyNOk4cMjOYa36Q==}
     peerDependencies:
       vue: ^3.0.0
 
-  '@ozjsey/v-keyboard-navigation@0.3.0':
-    resolution: {integrity: sha512-54usTaL37zLbd9L8D8qo6r19Z9EOelVC+Q8zxjEoI5HEs+7RL9mZWlcA0D+oIvsp5OhhBU8q2qWhYx0epSvq2A==}
+  '@ozjsey/v-keyboard-navigation@0.3.1':
+    resolution: {integrity: sha512-bD/bm2aM5MB84spzyQ6wUHZH33dSnZBSl3AIyrqj5krcZ8+wuKzJ+Tg91297Q+n7S465oWAMTGP8M38gddkQkA==}
     peerDependencies:
       vue: ^3.0.0
 
-  '@ozjsey/v-observe@0.2.1':
-    resolution: {integrity: sha512-YEJeZ2SVYBY/e3+kJg1EVu3lShq5eERXUHgpF2gwJsX+lsI6wDTD0j2JlZU//u2FjImG5Yfb4+2GpLaUJuw5Qg==}
+  '@ozjsey/v-observe@0.2.2':
+    resolution: {integrity: sha512-WwbK1foUjn2zbDoWSb8oCzIZdF1WJiwCMMibv0QuPY6rxDrd3P5OaXJPwGhcb9hrCvvOK+bk1rdKgxlKGmqpow==}
     peerDependencies:
       vue: ^3.0.0
 
@@ -405,8 +405,8 @@ packages:
     peerDependencies:
       vue: ^3.3.0
 
-  '@ozjsey/vue-write-behind@0.2.0':
-    resolution: {integrity: sha512-HX8tPhoD1EAYbb9kzj0kArg/i3lQTR4LgcLzUlgzDpgFexLe04MS1Ec+oBVuFuNWlYlGO4L61tyJHCvqUE/jdg==}
+  '@ozjsey/vue-write-behind@0.2.1':
+    resolution: {integrity: sha512-guJzR2SeW9wtPdaAQ+CXrNPwLLTEJUAEKU39aH5zkgevagm4XNRtv+W1XQ7YEridOMBGffjgAPCDVYb9COxzBg==}
     peerDependencies:
       vue: ^3.2.0
 
@@ -1079,9 +1079,9 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
-  '@ozjsey/bigdecimal-string@1.2.1': {}
+  '@ozjsey/bigdecimal-string@1.2.2': {}
 
-  '@ozjsey/dependency-grouper@0.3.6':
+  '@ozjsey/dependency-grouper@0.3.7':
     dependencies:
       sort-package-json: 2.15.1
       yaml: 2.9.1
@@ -1090,19 +1090,19 @@ snapshots:
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
-  '@ozjsey/v-dropzone@0.1.2(vue@3.5.43(typescript@5.9.3))':
+  '@ozjsey/v-dropzone@0.1.3(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
-  '@ozjsey/v-fit-children@2.3.1(vue@3.5.43(typescript@5.9.3))':
+  '@ozjsey/v-fit-children@2.3.2(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
-  '@ozjsey/v-keyboard-navigation@0.3.0(vue@3.5.43(typescript@5.9.3))':
+  '@ozjsey/v-keyboard-navigation@0.3.1(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
-  '@ozjsey/v-observe@0.2.1(vue@3.5.43(typescript@5.9.3))':
+  '@ozjsey/v-observe@0.2.2(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
@@ -1118,7 +1118,7 @@ snapshots:
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
-  '@ozjsey/vue-write-behind@0.2.0(vue@3.5.43(typescript@5.9.3))':
+  '@ozjsey/vue-write-behind@0.2.1(vue@3.5.43(typescript@5.9.3))':
     dependencies:
       '@ozjsey/write-behind': 0.1.1
       vue: 3.5.43(typescript@5.9.3)
