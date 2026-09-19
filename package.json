@@ -17,6 +17,7 @@
     "docs:ci": "node scripts/docs-ci.mjs",
     "geometry": "node scripts/geometry.mjs",
     "geometry:dist": "PLAYGROUND_TARGET=dist node scripts/geometry.mjs",
+    "harness": "node --test scripts/cdp.test.mjs",
     "preinstall": "dependency-grouper generate || exit 0",
     "interactions": "node scripts/interactions.mjs",
     "interactions:dist": "PLAYGROUND_TARGET=dist node scripts/interactions.mjs",

@@ -54,6 +54,11 @@ jobs:
       # live site; smoke passed throughout, because it aliases to source.
       - run: pnpm modules
       - run: pnpm smoke
+      # The harness's own tests. A reporter that loses the failure is worse
+      # than a missing check: the run still goes red, and the message sends
+      # you looking in the wrong place. Five rejections rendered as the bare
+      # string "Uncaught (in promise)" for two days because of that.
+      - run: pnpm harness
       - run: pnpm interactions
       - run: pnpm geometry
 

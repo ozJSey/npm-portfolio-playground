@@ -409,7 +409,10 @@ try {
     }
   }
 
-  for (const err of page.pageErrors) record('(page)', 'uncaught exception', false, err.split('\n')[0])
+  // The whole captured block, not just its first line: for a promise rejection
+  // the first line is the least specific part of it, and the stack under it is
+  // what names the demo.
+  for (const err of page.pageErrors) record('(page)', 'uncaught exception', false, err)
   // A contamination meter. `fresh()` navigates once per check, so anything much
   // above that is Vite reloading under the run — worth knowing before trusting
   // a marginal result (PG-21).

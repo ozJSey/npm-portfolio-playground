@@ -729,6 +729,35 @@ export class Cdp {
 }
 
 /** Attach to a fresh tab and return a page handle with evaluate/navigate. */
+/**
+ * A rejection reason, in the most specific form the protocol gave us.
+ *
+ * Order matters and each branch earns its place. An Error's `description`
+ * carries the stack, so it wins outright. A primitive arrives as `value`.
+ * A plain object arrives with `description: "Object"` — technically present
+ * and completely useless — so its `preview` properties are rendered instead,
+ * and `undefined`/`null` arrive with neither `value` nor `description` and
+ * have to be read off `type`/`subtype`.
+ *
+ * All four were checked against a real Chrome rather than reasoned about; the
+ * middle two are exactly the shapes that used to collapse into the single
+ * string "Uncaught (in promise)".
+ */
+const describeRemote = (ex, text) => {
+  if (!ex) return text
+  if (ex.subtype === 'error' && ex.description) return ex.description
+  if ('value' in ex) return `${text}: ${JSON.stringify(ex.value)}`
+  if (ex.preview?.properties?.length) {
+    const body = ex.preview.properties.map((pr) => `${pr.name}: ${pr.value}`).join(', ')
+    return `${text}: ${ex.className ?? 'Object'} { ${body} }`
+  }
+  if (ex.type === 'undefined') return `${text}: undefined`
+  if (ex.subtype === 'null') return `${text}: null`
+  if (ex.description) return `${text}: ${ex.description}`
+  if (ex.className) return `${text}: ${ex.className}`
+  return text
+}
+
 export async function newPage(cdp, url = 'about:blank') {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true })
@@ -742,10 +771,27 @@ export async function newPage(cdp, url = 'about:blank') {
     if (p.type === 'error') consoleErrors.push(text(p))
     else if (p.type === 'warning') consoleWarnings.push(text(p))
   })
+  /**
+   * An unhandled rejection whose reason is not an Error has no `description`,
+   * so this used to fall through to `d.text` — the literal string
+   * "Uncaught (in promise)", with nothing about what rejected or where.
+   *
+   * Five of those failed the daily workflow for two days running and said
+   * exactly that, five times. A failure report nobody can act on is barely
+   * better than a green run that was wrong, so every part the protocol offers
+   * is kept: the reason (an Error's stack, a primitive's value, or at least the
+   * constructor name), the throw site, and the top of the stack.
+   */
   cdp.on('Runtime.exceptionThrown', (p, sid) => {
     if (sid !== sessionId) return
     const d = p.exceptionDetails
-    pageErrors.push(d.exception?.description ?? d.text)
+    const ex = d.exception
+    const reason = describeRemote(ex, d.text)
+    const at = d.url ? `${d.url}:${(d.lineNumber ?? 0) + 1}:${(d.columnNumber ?? 0) + 1}` : null
+    const frames = (d.stackTrace?.callFrames ?? [])
+      .slice(0, 4)
+      .map((f) => `    at ${f.functionName || '<anonymous>'} (${f.url}:${f.lineNumber + 1}:${f.columnNumber + 1})`)
+    pageErrors.push([reason, at ? `    thrown at ${at}` : null, ...frames].filter(Boolean).join('\n'))
   })
 
   await cdp.send('Runtime.enable', {}, sessionId)
