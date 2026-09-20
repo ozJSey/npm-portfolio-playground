@@ -69,11 +69,28 @@ after(async () => {
     })
   }
 
-  // `maxRetries` for the same reason: Chrome's own children can outlive the
-  // parent by a few milliseconds, and a profile that will not delete is worth
-  // one more attempt rather than a failed run.
+  // Best effort, and NEVER fatal.
+  //
+  // This is hygiene, not an assertion. The suite tests the CDP reporter; it
+  // does not test the filesystem, and a run whose five checks all passed must
+  // not go red because a temp directory would not delete. That is exactly what
+  // happened twice: `ENOTEMPTY ... /Default/Cache/Cache_Data/index-dir`, hook
+  // failed, tests all green — a failure pointing at the thing it is least
+  // about.
+  //
+  // Waiting for the parent to exit is not sufficient on Linux either: Chrome's
+  // zygote and renderer children outlive it by a moment and keep handles open
+  // under the profile. Retries help and cannot guarantee. A leaked directory on
+  // an ephemeral runner costs nothing; a false red costs an afternoon.
   if (chrome?.userDataDir) {
-    rmSync(chrome.userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+    try {
+      rmSync(chrome.userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+    } catch (err) {
+      console.warn(
+        `[harness] could not remove the Chrome profile ${chrome.userDataDir}: ${err.code ?? err.message}. ` +
+          `Not failing the run — this is cleanup, not a check.`,
+      )
+    }
   }
 })
 
