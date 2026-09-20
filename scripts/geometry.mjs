@@ -478,11 +478,30 @@ function judge(viewportName, card) {
       if (!m) continue
       const where = hostCount > 1 ? `host ${h + 1}/${hostCount}` : ''
 
-      // A row whose every visible child is pinned has already hidden everything
-      // it was allowed to hide; spilling is then the directive obeying the
-      // consumer, not a defect (card 11 exists to demonstrate exactly this).
-      // What it still owes in that state is an honest `overflowing`.
-      const allVisiblePinned = m.visible > 0 && m.pinnedVisible === m.visible
+      // When is a spill allowed? Only when no amount of hiding could have
+      // prevented it — which is an arithmetic question, not a headcount.
+      //
+      // This used to ask "is every visible child pinned". That is a PROXY for
+      // the real condition and it cannot say why it is right: it forgives a row
+      // of three pinned chips that overran by 200px, and it convicts a row
+      // holding one pinned chip too wide for the space, which is the same
+      // situation with one fewer pin. `fit.ts` reserves the pinned cost up
+      // front and admits a non-pinned child only while it fits the remaining
+      // budget, so the honest test is whether the PINS ALONE exceed the space.
+      // If they do, spilling is the directive obeying `keep`; if they do not,
+      // something is wrong and the row should be convicted whatever the counts.
+      //
+      // This is deliberately broader than the rule it replaces — every state
+      // the old one forgave, this one forgives too — and it still convicts the
+      // failure that prompted it, where one pin of ~106px sits in 219px of
+      // space. An exemption that happened to cover the open bug would be an
+      // exemption written to make a red test green.
+      const pinnedBoxes = (m.visibleBoxesPx ?? []).filter((b) => b.pinned)
+      const pinnedSumPx =
+        pinnedBoxes.reduce((sum, b) => sum + b.w, 0) +
+        Math.max(0, pinnedBoxes.length - 1) * (m.gapPx ?? 0)
+      const pinsCannotFit = pinnedBoxes.length > 0 && pinnedSumPx > m.availablePx + 1
+      const allVisiblePinned = (m.visible > 0 && m.pinnedVisible === m.visible) || pinsCannotFit
 
       // --- the original half: something stuck out, or the host clipped it ---
       if (m.overflowPx > 1 && !allVisiblePinned) {
