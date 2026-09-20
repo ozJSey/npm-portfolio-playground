@@ -750,16 +750,29 @@ const CHECKS = [
     fn: async () => {
       const file = '14-vshow-order.vue'
       const stage = __pg.stage(file)
-      const open = stage.querySelector('input[type=checkbox]')
+      // Two toggles now, one per ordering: the card opens them separately so a
+      // reader can take in one verdict before the other appears. Driving them
+      // one at a time is also a stronger check than the single `open both` it
+      // replaces — each host is measured while the other is closed, so a
+      // verdict cannot be borrowed from a sibling that happened to be right.
+      const [openA, openB] = [...stage.querySelectorAll('input[type=checkbox]')]
+      if (!openA || !openB) throw new Error('expected one toggle per ordering')
 
       const verdicts = []
       for (let i = 0; i < 3; i++) {
-        __pg.set(open, true)
+        __pg.set(openA, true)
         await __pg.sleep(450)
-        const [a, b] = [...stage.querySelectorAll('.menu')]
-        verdicts.push([__tt.verdict(a), __tt.verdict(b)])
-        __pg.set(open, false)
-        await __pg.sleep(350)
+        const a = __tt.verdict([...stage.querySelectorAll('.menu')][0])
+        __pg.set(openA, false)
+        await __pg.sleep(250)
+
+        __pg.set(openB, true)
+        await __pg.sleep(450)
+        const b = __tt.verdict([...stage.querySelectorAll('.menu')][1])
+        __pg.set(openB, false)
+        await __pg.sleep(250)
+
+        verdicts.push([a, b])
       }
 
       const agree = verdicts.every(([a, b]) => a === b)

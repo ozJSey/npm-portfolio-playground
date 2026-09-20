@@ -12,7 +12,14 @@ import type { TeleportToEventDetail } from '@ozjsey/v-teleport-to'
 // column — and that column used to report `fit: unmeasured` on every open,
 // keep the cramped side and clamp the menu to it, permanently. The two columns
 // must agree. That they do is the whole card.
-const open = ref(false)
+// Two toggles, not one. Opening both at once is what made this card
+// unreadable: the two menus are identical by design, so a simultaneous
+// double-open shows a reader double vision rather than a comparison. Opened
+// one at a time, each column's verdict can actually be read before the other
+// appears — which is the only way the "they agree" claim means anything to a
+// human rather than to a test.
+const openA = ref(false)
+const openB = ref(false)
 const stage = useTemplateRef<HTMLElement>('stage')
 const triggerA = useTemplateRef<HTMLElement>('triggerA')
 const triggerB = useTemplateRef<HTMLElement>('triggerB')
@@ -58,7 +65,8 @@ const agree = computed(
 
 <template>
   <div class="pg-row" style="margin-bottom: 0.6rem">
-    <label class="pg-label"><input v-model="open" type="checkbox" /> open both</label>
+    <label class="pg-label"><input v-model="openA" type="checkbox" /> open directive-first</label>
+    <label class="pg-label"><input v-model="openB" type="checkbox" /> open v-show-first</label>
     <span class="pg-chip" :class="agree ? 'is-chosen' : 'is-cut'">
       {{ agree ? 'both orderings agree' : 'the two orderings disagree' }}
     </span>
@@ -85,7 +93,7 @@ const agree = computed(
   <!-- v-show written AFTER the directive — the order the README teaches. -->
   <div
     v-teleport-to="optionsA"
-    v-show="open"
+    v-show="openA"
     class="menu"
     @teleport-positioned="onA"
   >
@@ -94,7 +102,7 @@ const agree = computed(
 
   <!-- v-show written BEFORE the directive. -->
   <div
-    v-show="open"
+    v-show="openB"
     v-teleport-to="optionsB"
     class="menu"
     @teleport-positioned="onB"
@@ -113,7 +121,7 @@ const agree = computed(
     Before the measurement was fixed, only the right-hand column did.
     <code>compileTemplate</code> emits directives in source order, so writing
     <code>v-show</code> after <code>v-teleport-to</code> — which is what
-    <a href="https://github.com/ozJSey/vue-teleport-to#readme">the README's Usage example</a>
+    <a href="https://github.com/ozjsey/v-teleport-to#readme">the README's Usage example</a>
     does — ran the positioning hook while the host was still <code>display: none</code>. There was
     no box to read, the verdict was <code>unmeasured</code>, the requested side stood, and nothing
     ever re-measured: it stayed wrong on every subsequent open until an unrelated scroll or resize.
