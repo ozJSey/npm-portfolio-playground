@@ -161,7 +161,7 @@ function onPositioned(e: Event) {
     </div>
   </div>
 
-  <div v-show="open" v-teleport-to="options" class="popover" @teleport-positioned="onPositioned">
+  <div v-show="open" v-teleport-to="options" class="popover has-arrow" @teleport-positioned="onPositioned">
     <span class="arrow" />
     <strong>popover — placement = {{ chosen }}</strong>
     <span class="pg-muted">this popover is ~177px tall</span>

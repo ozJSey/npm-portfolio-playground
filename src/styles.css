@@ -1035,3 +1035,42 @@ kbd {
 .pg-library-failure-card h3 {
   margin: 0 0 0.75rem;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Teleported hosts
+   ───────────────────────────────────────────────────────────────────────────
+   Every host `v-teleport-to` positions is rendered into <body>, outside every
+   card's scoped styles, so this block is the only place that can reach them.
+   `[data-teleport-state]` is the library's own stamp, which means a card added
+   later is covered without anyone remembering this file exists.
+
+   The library writes `max-height` / `max-width` and deliberately does NOT write
+   `overflow` — clipping a consumer's host would cut focus rings, nested menus
+   and anything else deliberately painted past the edge. That makes honouring
+   the clamp the consumer's job, and here the consumer is this playground. Left
+   undone, plain text simply spilled out of the boxes: the positioning was
+   right and the page looked broken, which is the worst combination for a demo.
+
+   `:not(.has-arrow)` is the exception that proves the rule — cards 02 and 06
+   paint an arrow child that sits deliberately outside the host's box, and
+   `overflow` on those would clip the very thing they exist to show. */
+[data-teleport-state] {
+  /* A long word or URL wraps instead of running out of the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+[data-teleport-state]:not(.has-arrow) {
+  /* Makes the library's own `max-height` visible: content beyond it scrolls
+     rather than painting over whatever is underneath. */
+  overflow: auto;
+}
+/* An arrow-bearing host needs its own box clipped and its arrow NOT clipped,
+   which `hidden` and `visible` each get exactly half right — measured on card
+   06, `visible` left 479px of text painting over the page below it.
+   `overflow: clip` with a margin is the one rule that does both: content stops
+   at the edge, and the clip region is pushed out far enough for the arrow to
+   survive. */
+[data-teleport-state].has-arrow {
+  overflow: clip;
+  overflow-clip-margin: 14px;
+}

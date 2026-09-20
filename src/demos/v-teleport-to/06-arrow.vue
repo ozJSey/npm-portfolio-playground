@@ -98,7 +98,7 @@ function onPositioned() {
 
   <p class="pg-muted status">{{ readout }}</p>
 
-  <div ref="host" v-teleport-to="options" class="pop" @teleport-positioned="onPositioned">
+  <div ref="host" v-teleport-to="options" class="pop has-arrow" @teleport-positioned="onPositioned">
     <span ref="arrow" class="arrow" />
     Arrow tracks the reference centre
   </div>
