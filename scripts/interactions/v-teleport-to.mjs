@@ -1665,7 +1665,7 @@ const CHECKS = [
           /right-anchored/.test(far.say) &&
           /arrow off centre by -?0\.0px/.test(far.say),
         detail:
-          `viewport ${window.innerWidth}px, threshold at ${Math.round(window.innerWidth * 0.71)}px · ` +
+          `viewport ${window.innerWidth}px (layout ${document.documentElement.clientWidth}px, scrollbar ${window.innerWidth - document.documentElement.clientWidth}px), threshold at ${Math.round(window.innerWidth * 0.71)}px · ` +
           `rail 20% → reference right at ${near.pct}%, ${near.anchoredRight ? 'right' : 'left'}-anchored, ` +
           `left weld ${near.weldLeft}px, arrow off ${near.err}px · ` +
           `rail 100% → reference right at ${far.pct}%, ${far.anchoredRight ? 'right' : 'left'}-anchored, ` +
@@ -1825,7 +1825,7 @@ const CHECKS = [
           // Explicit 'end' well below the threshold: right-anchors anyway.
           endNear.anchoredRight && Math.abs(endNear.rightWeld) <= 1,
         detail:
-          `viewport ${window.innerWidth}px, heuristic fires past ` +
+          `viewport ${window.innerWidth}px (layout ${document.documentElement.clientWidth}px, scrollbar ${window.innerWidth - document.documentElement.clientWidth}px), heuristic fires past ` +
           `${Math.round(window.innerWidth * 0.71)}px · ` +
           [legacyFar, startFar, endNear, legacyNear]
             .map((r) => `${r.align}@${r.pos}% (ref right ${r.pct}%) → ` +
