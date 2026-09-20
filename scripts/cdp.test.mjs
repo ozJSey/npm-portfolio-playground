@@ -34,7 +34,7 @@ before(async () => {
   page = await newPage(cdp, 'about:blank')
 })
 
-after(() => {
+after(async () => {
   // Three separate things, and the first version got two of them wrong.
   //
   // `cdp.close()` disarms the stall watchdog, which otherwise fires once the
@@ -49,8 +49,32 @@ after(() => {
   // And the profile directory is ours to remove. `mkdtemp` profiles left
   // behind by these harnesses had reached 19 orphans and 567 MB.
   cdp?.close()
-  chrome?.proc?.kill('SIGKILL')
-  if (chrome?.userDataDir) rmSync(chrome.userDataDir, { recursive: true, force: true })
+
+  // Wait for Chrome to actually be gone before touching its profile.
+  //
+  // SIGKILL returns immediately; the process does not. Deleting the directory
+  // in the same tick races Chrome's still-open handles and rmSync throws
+  // ENOTEMPTY from somewhere deep in Cache_Data — which fails the hook, and
+  // therefore the job, while every test in the file has passed. That is the
+  // worst shape of red: the suite is fine and the cleanup is what broke.
+  const proc = chrome?.proc
+  if (proc && proc.exitCode === null && proc.signalCode === null) {
+    proc.kill('SIGKILL')
+    await new Promise((resolve) => {
+      const done = () => resolve()
+      proc.once('exit', done)
+      // Never hang the suite on a process that will not die; the retries below
+      // are the second line of defence.
+      setTimeout(done, 3000).unref?.()
+    })
+  }
+
+  // `maxRetries` for the same reason: Chrome's own children can outlive the
+  // parent by a few milliseconds, and a profile that will not delete is worth
+  // one more attempt rather than a failed run.
+  if (chrome?.userDataDir) {
+    rmSync(chrome.userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
+  }
 })
 
 /** Reject with `expr`, then return the single page error it produced. */
