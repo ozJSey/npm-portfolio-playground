@@ -14,8 +14,10 @@ import type {
  * history in a teleported dropdown, pick an old entry and put it back on the
  * clipboard — a clipboard manager built out of one directive plus a bound ref.
  *
- * `sink: []` is pre-seeded so `picker.history` is already an array on the very
- * first render, before the directive's `mounted` hook has run.
+ * `sink: []` is where entries are written. `picker.history` is NOT an array on
+ * the first render — the directive's `mounted` hook bridges the two, and Vue
+ * runs directive mounted hooks after that render — so every read of it below
+ * goes through `?? []`.
  */
 const picker = reactive<CopyController>({ sink: [], rich: true, dedupe: true, max: 6 })
 
