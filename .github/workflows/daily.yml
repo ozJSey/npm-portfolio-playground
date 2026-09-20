@@ -11,15 +11,28 @@ permissions:
   pages: write
   id-token: write
 
-# pages.yml deploys on every push to main. Without this, a scheduled run and a
-# push can hand GitHub Pages two different builds at the same time and the
-# winner is whichever finishes last.
-concurrency:
-  group: pages
-  cancel-in-progress: false
+# Concurrency is declared PER JOB, not for the workflow, and that distinction is
+# the whole point.
+#
+# This workflow used to sit in the `pages` group as a whole, to stop a scheduled
+# run and a push handing GitHub Pages two different builds at once. But
+# `pages.yml` declares the same group with `cancel-in-progress: true`, so every
+# push to main killed whatever verification was in flight. Measured on
+# 2026-09-20: dispatched runs at 10:14:50 and 10:18:32 were both cancelled
+# moments before push-triggered Pages runs at 10:16:19 and 10:34:42 — 28 minutes
+# of checks thrown away each time, and the run reported "cancelled", which reads
+# like somebody pressed a button rather than like a config collision.
+#
+# So only the DEPLOY job belongs in `pages`; the verification does not deploy
+# anything and has no business being cancellable by an unrelated push.
 
 jobs:
   verify-npm:
+    # Its own group: two verifications at once would only fight over the box,
+    # but a queued one must WAIT rather than kill the running one.
+    concurrency:
+      group: verify-npm
+      cancel-in-progress: false
     env:
       PLAYGROUND_USE_NPM: '1'
     runs-on: ubuntu-latest
@@ -64,6 +77,12 @@ jobs:
 
   deploy:
     needs: verify-npm
+    # The half that genuinely races pages.yml: both publish to GitHub Pages, so
+    # they serialise. Not cancel-in-progress — a deploy that has started should
+    # finish rather than leave Pages half-updated.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     env:
       PLAYGROUND_USE_NPM: '1'
     runs-on: ubuntu-latest
