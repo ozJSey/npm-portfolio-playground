@@ -337,6 +337,26 @@ const PROBE = `(async () => {
       widestVisiblePx: Math.round(widest),
       gapPx: Math.round(gap),
       clipPx: Math.max(0, Math.round(host.scrollWidth - host.clientWidth)),
+      // Per-child arithmetic, carried on every sample so a spill explains
+      // itself instead of only announcing a total.
+      //
+      // Card 03 spilled 5px on Linux CI and had 25px of FREE space on macOS at
+      // the identical width. Both measurements are honest: system-ui is a
+      // different typeface on each, so the chips are genuinely wider there.
+      // What could not be answered from the total alone is WHICH child
+      // overran, and by how much against what the row budgeted — the
+      // difference between "the fit arithmetic is wrong" and "the platform
+      // renders wider than it measured". v-fit-children is under a feature
+      // freeze, so the only responsible move is to make the next Linux run say
+      // which, rather than to edit a library on a hypothesis.
+      visibleBoxesPx: visible.map((c) => ({
+        w: Math.round(c.getBoundingClientRect().width),
+        pinned: c.hasAttribute('data-v-fit-keep'),
+        tag: c.tagName.toLowerCase(),
+      })),
+      visibleSumPx: Math.round(
+        rects.reduce((sum, r) => sum + r.width, 0) + Math.max(0, rects.length - 1) * gap,
+      ),
       state: host.getAttribute(STATE),
       events: host.__geom ? host.__geom.events : 0,
       detail: host.__geom ? host.__geom.detail : null,
@@ -466,6 +486,14 @@ function judge(viewportName, card) {
 
       // --- the original half: something stuck out, or the host clipped it ---
       if (m.overflowPx > 1 && !allVisiblePinned) {
+        // The arithmetic behind the total, so a spill on another platform is
+        // diagnosable from the log alone.
+        const boxes = (m.visibleBoxesPx ?? [])
+          .map((b) => `${b.tag}${b.pinned ? '*' : ''} ${b.w}px`)
+          .join(' + ')
+        note(viewportName, card, where, sample.at, 'over-spill',
+          `visible ${boxes} + ${Math.max(0, (m.visibleBoxesPx ?? []).length - 1)}×${m.gapPx}px gap ` +
+            `= ${m.visibleSumPx}px against ${m.availablePx}px available (* = pinned)`)
         note(viewportName, card, where, sample.at, 'over-spill',
           `${m.overflowPx}px past the content edge (${m.visible}/${m.eligible} children visible, ` +
             `${m.pinnedVisible} pinned)`)
