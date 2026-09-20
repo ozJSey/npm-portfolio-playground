@@ -136,6 +136,56 @@ window.__tt = {
     if (!l) throw new Error('no select labelled ' + needle + ' on ' + file)
     return l.querySelector('select')
   },
+  /** A checkbox inside the demo's own labelled control. */
+  toggle(file, needle) {
+    const l = __pg.label(file, needle)
+    if (!l) throw new Error('no checkbox labelled ' + needle + ' on ' + file)
+    const b = l.querySelector('input[type=checkbox]')
+    if (!b) throw new Error('the label ' + needle + ' on ' + file + ' has no checkbox')
+    return b
+  },
+  /**
+   * An element's box rounded to 1/100px, with the centres a cross-axis
+   * assertion needs. Every geometry check below reports in these units: the
+   * library writes full-precision px strings, so a correct answer lands inside
+   * a tenth of a pixel and the misses this file exists to catch are tens of
+   * pixels wide (127px of arrow, 438px of absolute origin).
+   */
+  box(el) {
+    const r = el.getBoundingClientRect()
+    const n = (v) => Math.round(v * 100) / 100
+    return {
+      top: n(r.top),
+      left: n(r.left),
+      right: n(r.right),
+      bottom: n(r.bottom),
+      width: n(r.width),
+      height: n(r.height),
+      cx: n((r.left + r.right) / 2),
+      cy: n((r.top + r.bottom) / 2),
+    }
+  },
+  /**
+   * The uniform scale a CSS transform is painting at — 1 when there is none.
+   * \`data-teleport-state\` is only worth anything if the consumer's transition
+   * actually runs off it, so the state checks read the painted scale rather
+   * than the attribute that is supposed to cause it.
+   */
+  scale(el) {
+    const t = getComputedStyle(el).transform
+    const m = t && t.match(/matrix\\(([^)]+)\\)/)
+    return m ? Math.round(parseFloat(m[1].split(',')[0]) * 1000) / 1000 : 1
+  },
+  /** One of a card's chips by index — the card's own rendered readout. */
+  chipAt(file, i) {
+    return __pg.txt(__pg.stage(file).querySelectorAll('.pg-chip')[i])
+  },
+  /** The non-blank lines of a card's \`<pre class="pg-log">\`, newest first. */
+  logLines(file) {
+    const pre = __pg.stage(file).querySelector('.pg-log')
+    if (!pre) throw new Error('no .pg-log on ' + file)
+    return (pre.textContent || '').split('\\n').map((l) => l.trim()).filter(Boolean)
+  },
 }
 'ready'
 `
@@ -147,6 +197,13 @@ const COMPOSABLE = '11-composable.vue'
 const OVERFLOW = '05-overflow.vue'
 const VIRTUAL = '09-virtual-reference.vue'
 const ABSOLUTE = '12-strategy-absolute.vue'
+const BASIC = '01-basic-dropdown.vue'
+const SIZING = '03-sizing.vue'
+const BOUNDARY = '04-boundary-scroll.vue'
+const ARROW = '06-arrow.vue'
+const CROSS = '07-cross-axis-offsets.vue'
+const AUTO = '08-auto-update.vue'
+const EVENTS = '10-events-state.vue'
 
 const CHECKS = [
   {
@@ -908,6 +965,1316 @@ const CHECKS = [
       }
     },
   },
+  {
+    demo: BASIC,
+    // The card with no options at all, which is the one most people copy. Its
+    // claim is entirely geometric: a plain block that would otherwise lay out
+    // at the stage's full width, under the clipper, instead renders as a menu
+    // welded to the trigger's own left and bottom edges — and a user can click
+    // the rows where they are painted.
+    //
+    // What makes it red: `to` never resolving (a template ref is null on the
+    // render pass that reads it, so the FIRST mounted call always sees
+    // `to: null` — this card is the shortest path to that regression) leaves
+    // the menu in flow, the full width of the stage, with no `min-width` floor
+    // and no anchor. The hit test is the half an attribute cannot carry: it
+    // fails if the menu is painted somewhere the user cannot reach it.
+    name: 'card 01: a bare binding pins the menu to its trigger at a positioned width, and its rows are clickable where they are painted',
+    fn: async () => {
+      const file = '01-basic-dropdown.vue'
+      const menu = __tt.host(file, '.menu')
+      const trigger = __tt.trigger(file)
+      const stage = __tt.box(__pg.stage(file))
+
+      __pg.button(file, 'menu').click()
+      await __pg.sleep(300)
+      const parked = await __tt.park(trigger, 300)
+
+      const m = __tt.box(menu)
+      const t = __tt.box(trigger)
+      const side = menu.dataset.teleportPlacement
+      const items = [...menu.querySelectorAll('.item')]
+      const third = items[2]
+      const tb = __tt.box(third)
+      const hit = document.elementFromPoint(tb.cx, tb.cy)
+      const hitName = hit === third ? 'the row itself' : `${hit ? hit.className || hit.tagName : 'nothing'}`
+
+      // Click it the way a user would — at the coordinates it is painted at,
+      // through the element the browser says is on top there.
+      let after = null
+      if (hit) {
+        hit.click()
+        await __pg.sleep(350)
+        after = {
+          display: getComputedStyle(menu).display,
+          label: __pg.txt(__pg.button(file, 'menu')),
+        }
+      }
+
+      return {
+        pass:
+          side === 'bottom' &&
+          items.length === 5 &&
+          // Welded to the reference, not laid out under it.
+          Math.abs(m.top - t.bottom) <= 1 &&
+          Math.abs(m.left - t.left) <= 1 &&
+          // Between the `min-width` floor (the reference) and the `max-width`
+          // ceiling (1.5x it) — and nowhere near the width a block in flow
+          // would have taken.
+          m.width >= t.width - 1 &&
+          m.width <= t.width * 1.5 + 1 &&
+          m.width < stage.width / 3 &&
+          hit === third &&
+          after !== null &&
+          after.display === 'none' &&
+          /Open menu/.test(after.label),
+        detail:
+          `reference parked ${parked}px from the top, ${t.width}px wide · ` +
+          `menu ${side} at ${m.left},${m.top} (${m.width}x${m.height}) — ` +
+          `top gap ${Math.round((m.top - t.bottom) * 100) / 100}px, ` +
+          `left offset ${Math.round((m.left - t.left) * 100) / 100}px, ` +
+          `vs ${stage.width}px of stage a block in flow would have filled · ` +
+          `${items.length} rows, hit test at row 3 (${tb.cx},${tb.cy}) → ${hitName} · ` +
+          `after clicking it: display ${after ? after.display : '(never clicked)'}, ` +
+          `trigger says "${after ? after.label : '—'}"`,
+      }
+    },
+  },
+  {
+    demo: BASIC,
+    // The other half of a bare binding: `position: fixed` coordinates are
+    // rewritten on every page scroll, so the menu has to stay on the trigger
+    // while the page moves under it. A dropped scroll listener does not throw
+    // and does not change one attribute — the menu simply stays where the
+    // viewport last put it, which is the exact drift measured here.
+    name: 'card 01: the open menu stays welded to its trigger across four page-scroll positions',
+    fn: async () => {
+      const file = '01-basic-dropdown.vue'
+      const menu = __tt.host(file, '.menu')
+      const trigger = __tt.trigger(file)
+
+      __pg.button(file, 'menu').click()
+      await __pg.sleep(300)
+
+      // Only downward travel is guaranteed on any page, so measure the room
+      // from the top of the document and step through it.
+      window.scrollTo(0, 0)
+      await __pg.sleep(500)
+      const start = Math.round(trigger.getBoundingClientRect().top)
+      const step = Math.max(0, (start - 140) / 3)
+
+      const seen = []
+      for (let i = 0; i < 4; i++) {
+        const at = await __tt.park(trigger, Math.round(start - step * i))
+        const m = __tt.box(menu)
+        const t = __tt.box(trigger)
+        const side = menu.dataset.teleportPlacement
+        // The weld is measured against whichever edge the menu is anchored to.
+        // `placement` here is the default `'auto'`, which prefers the roomier
+        // side — 663px down a 1313px window really is more room above than
+        // below once the edge buffers are charged — so pinning one side would
+        // be testing the scroll position rather than the tracking.
+        seen.push({
+          at,
+          side,
+          weld:
+            side === 'top'
+              ? Math.round((t.top - m.bottom) * 100) / 100
+              : Math.round((m.top - t.bottom) * 100) / 100,
+          dx: Math.round((m.left - t.left) * 100) / 100,
+          // …and the box really is on the side the attribute claims, so a
+          // stale attribute over a mispositioned menu cannot read as a weld.
+          onSide: side === 'top' ? m.bottom <= t.top + 1 : m.top >= t.bottom - 1,
+        })
+      }
+      const tops = seen.map((s) => s.at)
+      const spread = Math.max(...tops) - Math.min(...tops)
+
+      return {
+        pass:
+          spread > 250 &&
+          seen.every(
+            (s) =>
+              (s.side === 'top' || s.side === 'bottom') &&
+              s.onSide &&
+              Math.abs(s.weld) <= 1 &&
+              Math.abs(s.dx) <= 1,
+          ),
+        detail:
+          `reference starts ${start}px down a ${window.innerHeight}px viewport; ` +
+          `swept ${spread}px of travel · ` +
+          seen.map((s) => `@${s.at} ${s.side} weld ${s.weld}px dx ${s.dx}px`).join(' | '),
+      }
+    },
+  },
+  {
+    demo: SIZING,
+    // The card's own headline defect, in both of its forms. `min-width` was
+    // written unconditionally — "at least as wide as the reference" — so it
+    // beat every ceiling: on this 220px reference `widthMultiplier: 0.5`
+    // rendered 220px and the README's own `maxWidth: 0` rendered 220px. Two
+    // narrowing knobs, both documented, both silently dead.
+    //
+    // Red when the floor stops yielding: the panel snaps back to the
+    // reference's width and both measurements read 220.
+    name: 'card 03: widthMultiplier below 1 and a maxWidth under the reference both really narrow the panel',
+    fn: async () => {
+      const file = '03-sizing.vue'
+      const panel = __tt.host(file, '.panel')
+      const trigger = __tt.trigger(file, '.pg-btn')
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      __pg.set(__tt.toggle(file, 'matchWidth'), false)
+      __pg.set(__tt.toggle(file, 'maxWidth'), false)
+      await __pg.sleep(450)
+
+      const ref = __tt.box(trigger).width
+      const widthAt = async () => {
+        await __pg.sleep(400)
+        return __tt.box(panel).width
+      }
+
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 1.5)
+      const wide = await widthAt()
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 0.5)
+      const half = await widthAt()
+
+      // …and the same claim through the other knob. Back to a multiplier that
+      // would leave the panel wide, so only `maxWidth` can narrow it.
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 1.5)
+      await __pg.sleep(300)
+      __pg.set(__tt.toggle(file, 'maxWidth'), true)
+      await __pg.sleep(200)
+      __pg.set(__pg.stage(file).querySelector('input.pg-input'), 140)
+      const capped = await widthAt()
+
+      return {
+        pass:
+          // The premise: this really is the 220px reference the prose names.
+          ref > 200 &&
+          // 1.5x: the floor is the reference, and nothing is cut below it.
+          wide >= ref - 1 &&
+          wide <= ref * 1.5 + 1 &&
+          // 0.5x: the ceiling wins, to the pixel.
+          Math.abs(half - ref * 0.5) <= 1.5 &&
+          half < ref - 90 &&
+          // maxWidth 140 < 220: same story, different knob.
+          Math.abs(capped - 140) <= 1.5,
+        detail:
+          `reference ${ref}px wide · widthMultiplier 1.5 → ${wide}px · ` +
+          `widthMultiplier 0.5 → ${half}px (want ${Math.round(ref * 0.5)}px, ` +
+          `the old floor would have held it at ${ref}px) · ` +
+          `maxWidth 140 → ${capped}px`,
+      }
+    },
+  },
+  {
+    demo: SIZING,
+    // "Toggle matchWidth on and off again and the panel returns to its previous
+    // width: the pinned `width` is cleared, not left welded on." That sentence
+    // exists because `width` used to be set and never written back, so
+    // `matchWidth: true → false` pinned the host at the reference's width
+    // forever — the invariant is now "every style key is written every tick,
+    // '' where it does not apply", and this is what that looks like on screen.
+    name: 'card 03: matchWidth pins the panel to the reference and unticking it releases the pin instead of welding it on',
+    fn: async () => {
+      const file = '03-sizing.vue'
+      const panel = __tt.host(file, '.panel')
+      const trigger = __tt.trigger(file, '.pg-btn')
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      __pg.set(__tt.toggle(file, 'maxWidth'), false)
+      __pg.set(__tt.toggle(file, 'matchWidth'), false)
+      // A multiplier that makes "pinned" and "released" two obviously
+      // different boxes: half the reference, versus exactly the reference.
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 0.5)
+      await __pg.sleep(500)
+
+      const ref = __tt.box(trigger).width
+      const before = __tt.box(panel).width
+      __pg.set(__tt.toggle(file, 'matchWidth'), true)
+      await __pg.sleep(450)
+      const pinned = __tt.box(panel).width
+      __pg.set(__tt.toggle(file, 'matchWidth'), false)
+      await __pg.sleep(450)
+      const released = __tt.box(panel).width
+      // Twice, because a clear that only works on the first cycle is still a leak.
+      __pg.set(__tt.toggle(file, 'matchWidth'), true)
+      await __pg.sleep(400)
+      const pinnedAgain = __tt.box(panel).width
+      __pg.set(__tt.toggle(file, 'matchWidth'), false)
+      await __pg.sleep(400)
+      const releasedAgain = __tt.box(panel).width
+
+      return {
+        pass:
+          Math.abs(before - ref * 0.5) <= 1.5 &&
+          Math.abs(pinned - ref) <= 1 &&
+          Math.abs(pinnedAgain - ref) <= 1 &&
+          Math.abs(released - before) <= 1.5 &&
+          Math.abs(releasedAgain - before) <= 1.5 &&
+          // And the two states really are distinguishable, or none of it means
+          // anything.
+          Math.abs(pinned - released) > 60,
+        detail:
+          `reference ${ref}px · at widthMultiplier 0.5 the panel is ${before}px · ` +
+          `matchWidth on → ${pinned}px, off → ${released}px, on → ${pinnedAgain}px, ` +
+          `off → ${releasedAgain}px (a welded pin would read ${ref}px after every untick)`,
+      }
+    },
+  },
+  {
+    demo: SIZING,
+    // `maxHeight` is a cap on the host AND the number clamped to the room on
+    // the chosen side, and the user-visible face of it is how many of the
+    // twelve lines they can read. Reported, not inferred: the rendered box,
+    // the scroll overflow inside it, the truncation flag, and the row count.
+    //
+    // Red if the cap stops being written (twelve rows at every setting), if it
+    // is written but the content is not scrollable (a cut with no way to see
+    // the rest), or if `data-teleport-truncated` stops noticing a real cut.
+    name: 'card 03: maxHeight is the panel\'s rendered height, and the lines past it scroll instead of vanishing',
+    fn: async () => {
+      const file = '03-sizing.vue'
+      const panel = __tt.host(file, '.panel')
+      const trigger = __tt.trigger(file, '.pg-btn')
+      __pg.set(__tt.toggle(file, 'matchWidth'), false)
+      __pg.set(__tt.toggle(file, 'maxWidth'), false)
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 1.5)
+      await __pg.sleep(400)
+      // High on the page, so the room below is never what clamps the cap.
+      const parked = await __tt.park(trigger, 200)
+      const room = Math.round(window.innerHeight - trigger.getBoundingClientRect().bottom)
+
+      const at = async (px) => {
+        __pg.set(__tt.slider(file, 'maxHeight'), px)
+        await __pg.sleep(450)
+        const b = __tt.box(panel)
+        const r = __tt.rows(panel)
+        return {
+          px,
+          h: b.height,
+          rows: `${r.visible}/${r.total}`,
+          visible: r.visible,
+          total: r.total,
+          over: panel.scrollHeight - panel.clientHeight,
+          cut: panel.dataset.teleportTruncated !== undefined,
+          side: panel.dataset.teleportPlacement,
+        }
+      }
+
+      const tall = await at(320)
+      const mid = await at(180)
+      const tight = await at(60)
+
+      return {
+        pass:
+          room > 400 &&
+          tall.total === 12 &&
+          [tall, mid, tight].every((s) => s.side === 'bottom') &&
+          // The cap is a ceiling at every setting…
+          tall.h <= 321 && mid.h <= 181 && tight.h <= 61 &&
+          // …and it is the height whenever the content is taller than it.
+          mid.h >= 179 && tight.h >= 59 &&
+          // The user can read fewer lines as the cap tightens, and the ones
+          // they cannot read are scrollable rather than gone.
+          tall.visible >= 10 &&
+          tight.visible <= 4 &&
+          tall.visible > mid.visible && mid.visible > tight.visible &&
+          tight.over >= 100 &&
+          tight.cut === true,
+        detail:
+          `reference parked ${parked}px down, ${room}px of room below · ` +
+          [tall, mid, tight]
+            .map((s) => `maxHeight ${s.px} → ${s.h}px tall, ${s.rows} lines readable, ` +
+              `${s.over}px scrollable, truncated=${s.cut}`)
+            .join(' · '),
+      }
+    },
+  },
+  {
+    demo: BOUNDARY,
+    // `boundary` is the option that decides how much room the fit test thinks
+    // there is, and the only honest way to show it is to change nothing else.
+    // The reference is parked a fixed distance above the pane's own bottom
+    // edge — too little room below it inside the pane, hundreds of px below it
+    // in the viewport — so the SAME geometry has to produce opposite sides.
+    //
+    // Red if `boundary` stops reaching the space maths: both readings become
+    // `bottom`, the two available-space numbers converge, and the popover the
+    // card draws inside a 200px pane is the one that never fitted there.
+    name: 'card 04: boundary = pane clamps the fit test to the pane — same geometry, opposite side, and hundreds of px less room reported',
+    fn: async () => {
+      const file = '04-boundary-scroll.vue'
+      const pane = __pg.stage(file).querySelector('.pane')
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      const said = () => __pg.txt(pop.querySelector('.pg-muted'))
+
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      __pg.set(__tt.select(file, 'scrollContainer'), 'window')
+      __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), true)
+      await __pg.sleep(450)
+      // A known page position, so the viewport half of the comparison is a
+      // number this check chose rather than one `scrollIntoView` happened to
+      // leave behind. Page scroll does not move the reference inside the pane,
+      // so the pane half is untouched by it.
+      const parked = await __tt.park(trigger, 400)
+
+      // Park the reference 25px above the pane's own bottom edge. Twice:
+      // `scrollTop` is clamped and quantised, so one pass can land short.
+      for (let i = 0; i < 2; i++) {
+        pane.scrollTop += Math.round(
+          trigger.getBoundingClientRect().bottom - (pane.getBoundingClientRect().bottom - 25),
+        )
+        pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+        await __pg.sleep(350)
+      }
+      await __pg.sleep(200)
+      const pr = pane.getBoundingClientRect()
+      const t0 = trigger.getBoundingClientRect()
+      const below = Math.round(pr.bottom - t0.bottom)
+      const above = Math.round(t0.top - pr.top)
+      const hostH = Math.round(pop.getBoundingClientRect().height)
+
+      const read = async (on) => {
+        __pg.set(__tt.toggle(file, 'boundary'), on)
+        await __pg.sleep(500)
+        const h = __tt.box(pop)
+        const t = __tt.box(trigger)
+        const line = said()
+        const m = line.match(/(-?\d+)px available/)
+        return {
+          side: pop.dataset.teleportPlacement,
+          fit: pop.dataset.teleportFit,
+          space: m ? Number(m[1]) : NaN,
+          maxH: getComputedStyle(pop).maxHeight,
+          overRef: h.bottom <= t.top + 1,
+          underRef: h.top >= t.bottom - 1,
+          line,
+        }
+      }
+
+      const bounded = await read(true)
+      const free = await read(false)
+
+      return {
+        pass:
+          // The premise, measured: the reference is fully inside the pane, the
+          // popover cannot fit in the room left below it there, and can fit in
+          // the room above it.
+          below > 4 && below < hostH && above >= hostH + 20 && hostH > 35 &&
+          // Clamped to the pane: the room below is unusable, so the only side
+          // that works is above — and the space it reports is pane-sized.
+          bounded.side === 'top' && bounded.fit === 'fits' && bounded.overRef &&
+          bounded.space <= 220 &&
+          // Clamped to the viewport: the same reference, the same instant, has
+          // room to spare on the other side.
+          free.side === 'bottom' && free.fit === 'fits' && free.underRef &&
+          free.space >= 400 &&
+          free.space - bounded.space > 300,
+        detail:
+          `reference parked ${parked}px down the page · ` +
+          `pane ${Math.round(pr.height)}px tall, reference ${below}px above its bottom edge and ` +
+          `${above}px below its top, popover ${hostH}px · ` +
+          `boundary=pane → ${bounded.side}/${bounded.fit}, ${bounded.space}px available, ` +
+          `max-height ${bounded.maxH}, painted ${bounded.overRef ? 'ABOVE' : 'below'} the reference · ` +
+          `boundary=viewport → ${free.side}/${free.fit}, ${free.space}px available, ` +
+          `max-height ${free.maxH}, painted ${free.underRef ? 'BELOW' : 'above'} the reference`,
+      }
+    },
+  },
+  {
+    demo: BOUNDARY,
+    // `hideWhenReferenceHidden` is on by default, so the failure it guards
+    // against is a popover left floating over a pane whose trigger scrolled
+    // away. The half that actually shipped broken elsewhere in this library is
+    // the RELEASE: a hide the directive applied and never took back leaves the
+    // host `visibility: hidden` forever, which no test that only scrolls one
+    // way can see. Both directions, twice.
+    name: 'card 04: the reference leaving the pane blanks the host, and unticking hideWhenReferenceHidden gives it straight back',
+    fn: async () => {
+      const file = '04-boundary-scroll.vue'
+      const pane = __pg.stage(file).querySelector('.pane')
+      const pop = __tt.host(file, '.pop')
+      const said = () => __pg.txt(pop.querySelector('.pg-muted'))
+
+      // The pane IS the boundary here, and the region the hide test uses is
+      // `intersect(pane, viewport)` — so a pane hanging half off the screen
+      // would hide the host for the wrong reason. Put it in the middle.
+      pane.scrollIntoView({ block: 'center' })
+      __pg.set(__tt.toggle(file, 'boundary'), true)
+      __pg.set(__tt.select(file, 'scrollContainer'), 'window')
+      __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), true)
+      pane.scrollTop = 0
+      pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await __pg.sleep(500)
+
+      const snap = (label) => ({
+        label,
+        vis: getComputedStyle(pop).visibility,
+        marked: pop.dataset.teleportHidden !== undefined,
+        flagged: /hidden/.test(said()),
+      })
+      const visible = snap('reference in the pane')
+
+      const max = pane.scrollHeight - pane.clientHeight
+      pane.scrollTop = max
+      pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await __pg.sleep(500)
+      const gone = snap('scrolled past the reference')
+
+      __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), false)
+      await __pg.sleep(500)
+      const optedOut = snap('hideWhenReferenceHidden off')
+
+      __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), true)
+      await __pg.sleep(500)
+      const goneAgain = snap('back on')
+
+      pane.scrollTop = 0
+      pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await __pg.sleep(500)
+      const back = snap('reference back in view')
+
+      const states = [visible, gone, optedOut, goneAgain, back]
+      return {
+        pass:
+          max > 150 &&
+          visible.vis === 'visible' && !visible.marked && !visible.flagged &&
+          gone.vis === 'hidden' && gone.marked && gone.flagged &&
+          optedOut.vis === 'visible' && !optedOut.marked && !optedOut.flagged &&
+          goneAgain.vis === 'hidden' && goneAgain.marked &&
+          back.vis === 'visible' && !back.marked && !back.flagged,
+        detail:
+          `pane scrollable by ${max}px · ` +
+          states
+            .map((s) => `${s.label}: visibility ${s.vis}, data-teleport-hidden ${s.marked}, ` +
+              `card says hidden ${s.flagged}`)
+            .join(' · '),
+      }
+    },
+  },
+  {
+    demo: BOUNDARY,
+    // The trade-off the card spends a whole paragraph on, and the one nobody
+    // would guess: naming a `scrollContainer` REPLACES the capture-phase window
+    // listener rather than adding to it, so a page scroll stops moving the
+    // host — except while `hideWhenReferenceHidden` is on, which unions
+    // `window` back in as a floor because hiding cannot work without it.
+    //
+    // Three legs, one page scroll each. Red if the narrowing is not real (the
+    // first leg tracks anyway, so the paragraph is a lie), or if the floor
+    // stops being applied (the second leg drifts, and a default-on behaviour
+    // silently fails on a documented configuration).
+    name: "card 04: naming a scrollContainer drops the window listener — unless hideWhenReferenceHidden floors it back in",
+    fn: async () => {
+      const file = '04-boundary-scroll.vue'
+      const pane = __pg.stage(file).querySelector('.pane')
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+
+      // Viewport boundary, reference at the top of the pane: the page scroll
+      // must not change the room, so any movement is the listener and nothing else.
+      __pg.set(__tt.toggle(file, 'boundary'), false)
+      pane.scrollTop = 0
+      pane.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await __pg.sleep(450)
+
+      const gap = () =>
+        Math.round((pop.getBoundingClientRect().top - trigger.getBoundingClientRect().bottom) * 100) / 100
+
+      const leg = async (form, hide, label) => {
+        // Neutral first — the tracking configuration — so parking can never
+        // leave a stale gap behind for the leg to inherit.
+        __pg.set(__tt.select(file, 'scrollContainer'), 'window')
+        __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), true)
+        await __pg.sleep(400)
+        const parked = await __tt.park(trigger, 500)
+        __pg.set(__tt.select(file, 'scrollContainer'), form)
+        __pg.set(__tt.toggle(file, 'hideWhenReferenceHidden'), hide)
+        await __pg.sleep(500)
+        const before = gap()
+        window.scrollBy(0, 200)
+        await __pg.sleep(550)
+        const after = gap()
+        window.scrollBy(0, -200)
+        await __pg.sleep(300)
+        return { label, parked, before, after, moved: Math.round((after - before) * 100) / 100 }
+      }
+
+      const narrowed = await leg('pane', false, "pane, hide off")
+      const floored = await leg('pane', true, "pane, hide on")
+      const windowed = await leg('window', false, "'window', hide off")
+      const legs = [narrowed, floored, windowed]
+
+      return {
+        pass:
+          // Every leg starts anchored, or the deltas below mean nothing.
+          legs.every((l) => Math.abs(l.before) <= 1.5) &&
+          // Narrowed and opted out: nothing repositions, so the host drifts by
+          // exactly the page scroll.
+          Math.abs(narrowed.moved - 200) <= 3 &&
+          // The floor, and the default: still welded after the same scroll.
+          Math.abs(floored.moved) <= 2 &&
+          Math.abs(windowed.moved) <= 2,
+        detail:
+          `200px page scroll per leg · ` +
+          legs
+            .map((l) => `${l.label}: gap ${l.before}px → ${l.after}px (drifted ${l.moved}px)`)
+            .join(' · '),
+      }
+    },
+  },
+  {
+    demo: ARROW,
+    // The directive never draws the arrow; it publishes one number per axis and
+    // the consumer's CSS pins the arrow to the edge facing the reference. The
+    // contract is that the arrow's painted centre sits exactly on the
+    // reference's painted centre, and it has to hold on all four sides — the
+    // horizontal ones read the OTHER variable, computed from the other pair of
+    // edges, so a fix on one axis says nothing about the other.
+    //
+    // Red on the historical defect (the left edge derived from the PROJECTED
+    // width rather than the rendered one, which put the arrow 127px outside the
+    // popover) and equally red if the vars stop being emitted at all: with
+    // `left: var(--teleport-arrow-x)` unresolved the arrow falls back to its
+    // static position and the error becomes tens of pixels.
+    name: 'card 06: the arrow centre lands on the reference centre on all four placements, right across the rail',
+    fn: async () => {
+      const file = '06-arrow.vue'
+      const pop = __tt.host(file, '.pop')
+      const arrow = __tt.host(file, '.arrow')
+      const trigger = __tt.trigger(file)
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 4)
+      await __pg.sleep(500)
+
+      const seen = []
+      for (const asked of ['bottom', 'top', 'left', 'right']) {
+        __pg.set(__tt.select(file, 'placement'), asked)
+        await __pg.sleep(300)
+        for (const pos of [0, 45, 100]) {
+          __pg.set(__tt.slider(file, 'reference position'), pos)
+          await __pg.sleep(400)
+          // The side it actually went to, not the one that was asked for: a
+          // horizontal request with no room flips, and the arrow then reads
+          // the other axis. Testing the requested side would measure the
+          // wrong variable and call it a pass.
+          const got = pop.dataset.teleportPlacement
+          const horizontal = got === 'left' || got === 'right'
+          const a = __tt.box(arrow)
+          const t = __tt.box(trigger)
+          const h = __tt.box(pop)
+          const err = horizontal ? a.cy - t.cy : a.cx - t.cx
+          const inside = horizontal
+            ? a.cy >= h.top - 1 && a.cy <= h.bottom + 1
+            : a.cx >= h.left - 1 && a.cx <= h.right + 1
+          seen.push({
+            asked,
+            pos,
+            got,
+            err: Math.round(err * 100) / 100,
+            inside,
+            axis: horizontal ? 'y' : 'x',
+          })
+        }
+      }
+      const worst = seen.reduce((m, s) => (Math.abs(s.err) > Math.abs(m.err) ? s : m), seen[0])
+      const sides = [...new Set(seen.map((s) => s.got))]
+
+      return {
+        pass:
+          seen.length === 12 &&
+          // All four sides were really exercised, or this is a check on one
+          // branch wearing four names.
+          sides.length === 4 &&
+          seen.every((s) => Math.abs(s.err) <= 0.75 && s.inside),
+        detail:
+          `12 samples across ${sides.length} rendered side(s) (${sides.join('/')}) · ` +
+          `worst arrow error ${worst.err}px on the ${worst.axis} axis ` +
+          `(asked ${worst.asked}, got ${worst.got}, rail ${worst.pos}%) · ` +
+          `${seen.filter((s) => !s.inside).length} sample(s) put the arrow outside its own popover`,
+      }
+    },
+  },
+  {
+    demo: ARROW,
+    // The specific shape the arrow bug had. Past 71% of the viewport width the
+    // host right-anchors on its own — no option asks for it — and is then
+    // positioned with CSS `right:`, so its real left edge is
+    // `referenceRight − RENDERED width`. `max-width` is a cap, so at a 6x
+    // multiplier on a 96px reference the rendered width is nowhere near the
+    // projected 576px, and deriving the arrow from the projection put it a
+    // couple of hundred pixels past the popover's own edge.
+    //
+    // The check requires the threshold to be REACHED: the card's own prose
+    // admits the slider cannot reach it on a window wider than ~2100px, so a
+    // run that never right-anchors has not tested this and must say so rather
+    // than pass.
+    name: 'card 06: past 71% of the viewport the host right-anchors, and the arrow follows the rendered width, not the projected one',
+    fn: async () => {
+      const file = '06-arrow.vue'
+      const pop = __tt.host(file, '.pop')
+      const arrow = __tt.host(file, '.arrow')
+      const trigger = __tt.trigger(file)
+      const status = () => __pg.txt(__pg.stage(file).querySelector('.status'))
+
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      __pg.set(__tt.select(file, 'placement'), 'bottom')
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 6)
+      await __pg.sleep(500)
+
+      const at = async (pos) => {
+        __pg.set(__tt.slider(file, 'reference position'), pos)
+        await __pg.sleep(450)
+        const t = __tt.box(trigger)
+        const h = __tt.box(pop)
+        const a = __tt.box(arrow)
+        return {
+          pos,
+          pct: Math.round((t.right / window.innerWidth) * 1000) / 10,
+          anchoredRight: pop.style.right !== '',
+          rendered: h.width,
+          projected: Math.round(t.width * 6),
+          err: Math.round((a.cx - t.cx) * 100) / 100,
+          inside: a.cx >= h.left - 1 && a.cx <= h.right + 1,
+          weldRight: Math.round((h.right - t.right) * 100) / 100,
+          weldLeft: Math.round((h.left - t.left) * 100) / 100,
+          say: status(),
+        }
+      }
+
+      const near = await at(20)
+      const far = await at(100)
+
+      return {
+        pass:
+          // Left of the threshold: left-anchored, welded to the reference's
+          // left edge.
+          near.pct < 71 && !near.anchoredRight && Math.abs(near.weldLeft) <= 1 &&
+          Math.abs(near.err) <= 0.75 && near.inside &&
+          // The threshold was actually reached on this window.
+          far.pct >= 71 && far.anchoredRight &&
+          // Right-anchored: welded to the reference's RIGHT edge instead.
+          Math.abs(far.weldRight) <= 1 &&
+          // The gap that made the defect possible is genuinely open here.
+          far.projected - far.rendered > 100 &&
+          Math.abs(far.err) <= 0.75 && far.inside &&
+          // And the card tells the reader the same thing it is doing. The
+          // sign is optional because `(-0.004).toFixed(1)` is `"-0.0"`, which
+          // is the same zero.
+          /right-anchored/.test(far.say) &&
+          /arrow off centre by -?0\.0px/.test(far.say),
+        detail:
+          `viewport ${window.innerWidth}px, threshold at ${Math.round(window.innerWidth * 0.71)}px · ` +
+          `rail 20% → reference right at ${near.pct}%, ${near.anchoredRight ? 'right' : 'left'}-anchored, ` +
+          `left weld ${near.weldLeft}px, arrow off ${near.err}px · ` +
+          `rail 100% → reference right at ${far.pct}%, ${far.anchoredRight ? 'right' : 'left'}-anchored, ` +
+          `host ${far.rendered}px rendered / ${far.projected}px projected, right weld ${far.weldRight}px, ` +
+          `arrow off ${far.err}px, inside=${far.inside} · card says: ${far.say}`,
+      }
+    },
+  },
+  {
+    demo: CROSS,
+    // `crossAxisAlign` is three different anchor formulas, and the only way to
+    // tell them apart is where the host's box lands. Each is asserted against
+    // its OWN edge — start against the reference's left, center against its
+    // centre, end against its right — so "alignment was ignored and everything
+    // left-anchored" fails on two of the three rather than passing on all.
+    //
+    // The vacuity guard matters as much as the assertions: if the host and the
+    // reference happen to be the same width the three formulas coincide and
+    // the check proves nothing, so the difference is measured and required.
+    name: 'card 07: the three crossAxisAlign values land the host on three different edges, and offsetX/offsetY nudge it exactly',
+    fn: async () => {
+      const file = '07-cross-axis-offsets.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      const n = (v) => Math.round(v * 100) / 100
+
+      __pg.set(__tt.select(file, 'placement'), 'bottom')
+      __pg.set(__tt.slider(file, 'reference position'), 20)
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 2)
+      __pg.set(__tt.slider(file, 'offsetX'), 0)
+      __pg.set(__tt.slider(file, 'offsetY'), 8)
+      await __pg.sleep(450)
+      const parked = await __tt.park(trigger, 300)
+
+      const read = async (align) => {
+        __pg.set(__tt.select(file, 'crossAxisAlign'), align)
+        await __pg.sleep(400)
+        const h = __tt.box(pop)
+        const t = __tt.box(trigger)
+        return {
+          align,
+          side: pop.dataset.teleportPlacement,
+          left: h.left,
+          startErr: n(h.left - t.left),
+          centreErr: n(h.cx - t.cx),
+          endErr: n(h.right - t.right),
+          topErr: n(h.top - t.bottom - 8),
+          hostW: h.width,
+          refW: t.width,
+        }
+      }
+
+      const start = await read('start')
+      const centre = await read('center')
+      const end = await read('end')
+
+      // The offsets, read off the anchor they are cleanest against.
+      __pg.set(__tt.select(file, 'crossAxisAlign'), 'start')
+      __pg.set(__tt.slider(file, 'offsetX'), 60)
+      __pg.set(__tt.slider(file, 'offsetY'), -40)
+      await __pg.sleep(450)
+      const hn = __tt.box(pop)
+      const tn = __tt.box(trigger)
+      const nudged = {
+        side: pop.dataset.teleportPlacement,
+        dx: n(hn.left - tn.left - 60),
+        dy: n(hn.top - tn.bottom + 40),
+      }
+
+      return {
+        pass:
+          // The premise: the two boxes differ enough for the three formulas to
+          // give three different answers.
+          Math.abs(start.hostW - start.refW) >= 6 &&
+          [start, centre, end].every((r) => r.side === 'bottom') &&
+          nudged.side === 'bottom' &&
+          // Each alignment against its own edge.
+          Math.abs(start.startErr) <= 1 &&
+          Math.abs(centre.centreErr) <= 1 &&
+          Math.abs(end.endErr) <= 1 &&
+          // The default offsetY of 8 is honoured on all three.
+          [start, centre, end].every((r) => Math.abs(r.topErr) <= 1) &&
+          // And the offsets move the host by exactly what they say.
+          Math.abs(nudged.dx) <= 1 &&
+          Math.abs(nudged.dy) <= 1,
+        detail:
+          `reference parked ${parked}px down, ${start.refW}px wide; host ${start.hostW}px wide ` +
+          `(${n(Math.abs(start.hostW - start.refW))}px of spread between the three anchors) · ` +
+          `start → left edge off by ${start.startErr}px · ` +
+          `center → centre off by ${centre.centreErr}px · ` +
+          `end → right edge off by ${end.endErr}px · ` +
+          `host lefts ${start.left} / ${centre.left} / ${end.left} · ` +
+          `offsetX 60 / offsetY -40 → off by ${nudged.dx}px, ${nudged.dy}px`,
+      }
+    },
+  },
+  {
+    demo: CROSS,
+    // "Passing any explicit value — including 'start' — opts out of that
+    // heuristic for good, so the same slide changes nothing." That sentence is
+    // the card's whole point and it is only testable at the right-hand end of
+    // the rail, where the omitted form flips to a right anchor on its own.
+    //
+    // Two claims in one place, so a regression cannot hide behind the other:
+    // the implicit branch still fires where it is documented to, and an
+    // explicit value really does neutralise it. `end` at the LEFT end is the
+    // control that keeps this from being "the heuristic is the only thing that
+    // right-anchors".
+    name: "card 07: at the rail's right end the omitted crossAxisAlign right-anchors, an explicit 'start' does not, and 'end' anchors right anywhere",
+    fn: async () => {
+      const file = '07-cross-axis-offsets.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      const status = () => __pg.txt(__pg.stage(file).querySelector('.status'))
+      const n = (v) => Math.round(v * 100) / 100
+
+      __pg.set(__tt.select(file, 'placement'), 'bottom')
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 2)
+      __pg.set(__tt.slider(file, 'offsetX'), 0)
+      await __pg.sleep(400)
+      await __tt.park(trigger, 300)
+
+      const at = async (align, pos) => {
+        __pg.set(__tt.select(file, 'crossAxisAlign'), align)
+        __pg.set(__tt.slider(file, 'reference position'), pos)
+        await __pg.sleep(450)
+        const h = __tt.box(pop)
+        const t = __tt.box(trigger)
+        return {
+          align,
+          pos,
+          pct: Math.round((t.right / window.innerWidth) * 1000) / 10,
+          anchoredRight: pop.style.right !== '',
+          leftWeld: n(h.left - t.left),
+          rightWeld: n(h.right - t.right),
+          say: status(),
+        }
+      }
+
+      const legacyFar = await at('legacy', 100)
+      const startFar = await at('start', 100)
+      const endNear = await at('end', 20)
+      const legacyNear = await at('legacy', 20)
+
+      return {
+        pass:
+          // The threshold was reachable on this window — otherwise nothing
+          // below has been tested.
+          legacyFar.pct >= 71 && legacyNear.pct < 71 &&
+          // Omitted: the implicit branch fires past the threshold and not before.
+          legacyFar.anchoredRight && Math.abs(legacyFar.rightWeld) <= 1 &&
+          /right-anchored/.test(legacyFar.say) &&
+          !legacyNear.anchoredRight && Math.abs(legacyNear.leftWeld) <= 1 &&
+          // Explicit 'start' at the same position: untouched by the heuristic.
+          !startFar.anchoredRight && Math.abs(startFar.leftWeld) <= 1 &&
+          /left-anchored/.test(startFar.say) &&
+          // Explicit 'end' well below the threshold: right-anchors anyway.
+          endNear.anchoredRight && Math.abs(endNear.rightWeld) <= 1,
+        detail:
+          `viewport ${window.innerWidth}px, heuristic fires past ` +
+          `${Math.round(window.innerWidth * 0.71)}px · ` +
+          [legacyFar, startFar, endNear, legacyNear]
+            .map((r) => `${r.align}@${r.pos}% (ref right ${r.pct}%) → ` +
+              `${r.anchoredRight ? 'right' : 'left'}-anchored, ` +
+              `left weld ${r.leftWeld}px / right weld ${r.rightWeld}px`)
+            .join(' · '),
+      }
+    },
+  },
+  {
+    demo: CROSS,
+    // The horizontal branch is a second, separate cascade: the cross axis
+    // becomes VERTICAL, the anchor becomes the reference's right edge, and
+    // `offsetY` stops meaning "gap" and starts meaning "slide along the
+    // reference". None of that is exercised by the vertical check above.
+    // `widthMultiplier: 1` is deliberate — it wraps the host onto two lines so
+    // the host and the reference are measurably different heights, which is
+    // what makes the three alignments distinguishable at all.
+    name: "card 07: on a horizontal placement the host welds to the reference's right edge and crossAxisAlign works down the vertical axis",
+    fn: async () => {
+      const file = '07-cross-axis-offsets.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      const n = (v) => Math.round(v * 100) / 100
+
+      __pg.set(__tt.select(file, 'placement'), 'right')
+      __pg.set(__tt.slider(file, 'reference position'), 20)
+      __pg.set(__tt.slider(file, 'widthMultiplier'), 1)
+      __pg.set(__tt.slider(file, 'offsetX'), 0)
+      __pg.set(__tt.slider(file, 'offsetY'), 0)
+      await __pg.sleep(450)
+      const parked = await __tt.park(trigger, 300)
+
+      const read = async (align) => {
+        __pg.set(__tt.select(file, 'crossAxisAlign'), align)
+        await __pg.sleep(400)
+        const h = __tt.box(pop)
+        const t = __tt.box(trigger)
+        return {
+          align,
+          side: pop.dataset.teleportPlacement,
+          weld: n(h.left - t.right),
+          startErr: n(h.top - t.top),
+          centreErr: n(h.cy - t.cy),
+          endErr: n(h.bottom - t.bottom),
+          hostH: h.height,
+          refH: t.height,
+        }
+      }
+
+      const start = await read('start')
+      const centre = await read('center')
+      const end = await read('end')
+
+      __pg.set(__tt.select(file, 'crossAxisAlign'), 'start')
+      __pg.set(__tt.slider(file, 'offsetX'), 40)
+      __pg.set(__tt.slider(file, 'offsetY'), 20)
+      await __pg.sleep(450)
+      const hn = __tt.box(pop)
+      const tn = __tt.box(trigger)
+      const nudged = {
+        side: pop.dataset.teleportPlacement,
+        dx: n(hn.left - tn.right - 40),
+        dy: n(hn.top - tn.top - 20),
+      }
+
+      return {
+        pass:
+          // Vacuity guard: two boxes of the same height make the three
+          // formulas agree, and the check would pass on nothing.
+          Math.abs(start.hostH - start.refH) >= 8 &&
+          [start, centre, end].every((r) => r.side === 'right' && Math.abs(r.weld) <= 1) &&
+          Math.abs(start.startErr) <= 1 &&
+          Math.abs(centre.centreErr) <= 1 &&
+          Math.abs(end.endErr) <= 1 &&
+          nudged.side === 'right' &&
+          Math.abs(nudged.dx) <= 1 &&
+          Math.abs(nudged.dy) <= 1,
+        detail:
+          `reference parked ${parked}px down, ${start.refH}px tall; host ${start.hostH}px tall ` +
+          `(${n(Math.abs(start.hostH - start.refH))}px of spread between the three anchors) · ` +
+          `left edge welded to the reference's right by ` +
+          `${[start, centre, end].map((r) => r.weld + 'px').join('/')} · ` +
+          `start → top off ${start.startErr}px · center → centre off ${centre.centreErr}px · ` +
+          `end → bottom off ${end.endErr}px · ` +
+          `offsetX 40 / offsetY 20 → off by ${nudged.dx}px, ${nudged.dy}px`,
+      }
+    },
+  },
+  {
+    demo: AUTO,
+    // `autoUpdate` exists for exactly the layout change no event reports, and
+    // the card is built so nothing else can produce the answer: both buttons
+    // mutate the DOM with `document.createTextNode` and the drift readout is
+    // written straight into a text node, so Vue never re-renders and the
+    // directive's `updated` hook never fires. The reference is an INLINE
+    // element in a narrow column, so the appended words wrap and it grows
+    // downwards — which is the only direction the anchor cares about.
+    //
+    // Red both ways: if the observers stop firing the second reading drifts,
+    // and if the card ever grows a reactive dependency the FIRST reading stops
+    // drifting and the card starts proving the opposite of what it claims.
+    name: 'card 08: with autoUpdate off a growing reference leaves the host behind, and with it on the host follows',
+    fn: async () => {
+      const file = '08-auto-update.vue'
+      const host = __tt.host(file, '.pop')
+      const ref = __tt.host(file, '.reference')
+      const gapEl = __pg.stage(file).querySelector('.pg-row .pg-muted strong')
+      const drift = () =>
+        Math.round((host.getBoundingClientRect().top - ref.getBoundingClientRect().bottom) * 100) / 100
+      const refH = () => Math.round(ref.getBoundingClientRect().height)
+      const says = () => parseFloat(__pg.txt(gapEl))
+
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      await __pg.sleep(450)
+      __pg.button(file, 'Reset').click()
+      await __pg.sleep(400)
+
+      const grow = async (times) => {
+        for (let i = 0; i < times; i++) {
+          __pg.button(file, 'Grow the reference').click()
+          await __pg.sleep(200)
+        }
+        await __pg.sleep(500)
+      }
+
+      // Toggling the checkbox IS a re-render, which repositions — so the
+      // baseline is taken after the toggle and the growth after the baseline.
+      __pg.set(__tt.toggle(file, 'autoUpdate'), false)
+      await __pg.sleep(500)
+      const h0 = refH()
+      const base0 = drift()
+      await grow(2)
+      const off = { drift: drift(), said: says(), h: refH() }
+
+      __pg.button(file, 'Reset').click()
+      await __pg.sleep(500)
+      const restored = drift()
+
+      __pg.set(__tt.toggle(file, 'autoUpdate'), true)
+      await __pg.sleep(500)
+      const base1 = drift()
+      await grow(2)
+      const on = { drift: drift(), said: says(), h: refH() }
+
+      return {
+        pass:
+          Math.abs(base0) <= 1 && Math.abs(base1) <= 1 &&
+          // The reference really got taller, both times, or there was nothing
+          // for the observers to miss or catch.
+          off.h - h0 >= 25 && on.h - h0 >= 25 &&
+          // Unobserved: the host stays where the last render put it.
+          off.drift <= -25 &&
+          // Observed: welded, through a change Vue never heard about.
+          Math.abs(on.drift) <= 1 &&
+          // Shrinking back puts the anchor back, so the drift was the growth
+          // and not a one-way ratchet.
+          Math.abs(restored) <= 2 &&
+          // The card's own readout is telling the reader the truth.
+          Math.abs(off.said - off.drift) <= 1 && Math.abs(on.said - on.drift) <= 1,
+        detail:
+          `reference ${h0}px tall at rest · autoUpdate off: grew to ${off.h}px, ` +
+          `drift ${off.drift}px (card says ${off.said}px) · reset → ${restored}px · ` +
+          `autoUpdate on: baseline ${base1}px, grew to ${on.h}px, drift ${on.drift}px ` +
+          `(card says ${on.said}px)`,
+      }
+    },
+  },
+  {
+    demo: AUTO,
+    // `autoUpdateSubtree` is a narrow tool and the card is the only place its
+    // narrowness is visible: the MutationObserver is attached to the reference
+    // ALONE, so appending to the reference is a `childList` mutation on the
+    // observed node and appending inside a descendant is not. Both legs run in
+    // ONE configuration — autoUpdate on, subtree off — so the discriminating
+    // pair cannot be explained by anything else that changed between them.
+    //
+    // `ResizeObserver` cannot cover for it here either: it does not report
+    // non-replaced inline elements at all, which is why the reference is one.
+    name: 'card 08: with autoUpdate on but subtree off, growing the reference is caught and growing a descendant is not',
+    fn: async () => {
+      const file = '08-auto-update.vue'
+      const host = __tt.host(file, '.pop')
+      const ref = __tt.host(file, '.reference')
+      const drift = () =>
+        Math.round((host.getBoundingClientRect().top - ref.getBoundingClientRect().bottom) * 100) / 100
+      const refH = () => Math.round(ref.getBoundingClientRect().height)
+
+      __pg.sec(file).scrollIntoView({ block: 'center' })
+      await __pg.sleep(450)
+      __pg.set(__tt.toggle(file, 'autoUpdate'), true)
+      await __pg.sleep(300)
+      __pg.set(__tt.toggle(file, 'autoUpdateSubtree'), false)
+      await __pg.sleep(400)
+      __pg.button(file, 'Reset').click()
+      await __pg.sleep(450)
+
+      const grow = async (needle, times) => {
+        for (let i = 0; i < times; i++) {
+          __pg.button(file, needle).click()
+          await __pg.sleep(200)
+        }
+        await __pg.sleep(500)
+      }
+      const reset = async () => {
+        __pg.button(file, 'Reset').click()
+        await __pg.sleep(500)
+      }
+
+      const rest = refH()
+      const base = drift()
+
+      await grow('Grow the reference', 2)
+      const self = { drift: drift(), h: refH() }
+      await reset()
+
+      await grow('nested descendant', 2)
+      const nestedOff = { drift: drift(), h: refH() }
+      await reset()
+
+      __pg.set(__tt.toggle(file, 'autoUpdateSubtree'), true)
+      await __pg.sleep(500)
+      await reset()
+      const base2 = drift()
+      await grow('nested descendant', 2)
+      const nestedOn = { drift: drift(), h: refH() }
+
+      return {
+        pass:
+          Math.abs(base) <= 1 && Math.abs(base2) <= 1 &&
+          // Every leg really grew the reference, or "caught" and "missed" are
+          // the same non-event.
+          self.h - rest >= 25 && nestedOff.h - rest >= 25 && nestedOn.h - rest >= 25 &&
+          // subtree off: a mutation ON the reference is seen…
+          Math.abs(self.drift) <= 1 &&
+          // …and the same growth one level down is not.
+          nestedOff.drift <= -25 &&
+          // subtree on: now it is.
+          Math.abs(nestedOn.drift) <= 1,
+        detail:
+          `reference ${rest}px tall at rest, baselines ${base}px / ${base2}px · ` +
+          `subtree off — grow the reference: ${self.h}px tall, drift ${self.drift}px · ` +
+          `subtree off — grow a descendant: ${nestedOff.h}px tall, drift ${nestedOff.drift}px · ` +
+          `subtree on — grow a descendant: ${nestedOn.h}px tall, drift ${nestedOn.drift}px`,
+      }
+    },
+  },
+  {
+    demo: EVENTS,
+    // `data-teleport-state` is only worth stamping if a consumer's transition
+    // runs off it, so this reads the PAINTED opacity and scale rather than the
+    // attribute that is supposed to cause them. The rest is the dormant
+    // contract in full: every positioning signal cleared (the README ships
+    // `[data-teleport-truncated]` and `[data-teleport-collapsed]` recipes, so a
+    // signal left on a dormant host is consumer CSS styling an element the
+    // directive has let go of), and the placement cache reset so re-enabling
+    // reports `prev: (none)` again instead of staying silent.
+    name: 'card 10: unticking `enabled` fades the host out and clears every positioning signal; re-ticking reports a fresh placement',
+    fn: async () => {
+      const file = '10-events-state.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      const enabled = __tt.toggle(file, 'enabled')
+
+      __pg.set(enabled, true)
+      await __pg.sleep(400)
+      await __tt.park(trigger, 300)
+
+      const read = () => ({
+        state: pop.dataset.teleportState || null,
+        side: pop.dataset.teleportPlacement || null,
+        fit: pop.dataset.teleportFit || null,
+        opacity: Math.round(parseFloat(getComputedStyle(pop).opacity) * 100) / 100,
+        scale: __tt.scale(pop),
+      })
+
+      const open0 = read()
+      const lines0 = __tt.logLines(file)
+
+      __pg.set(enabled, false)
+      await __pg.sleep(700)
+      const closed = read()
+      const linesClosed = __tt.logLines(file)
+
+      __pg.set(enabled, true)
+      await __pg.sleep(800)
+      const open1 = read()
+      const lines1 = __tt.logLines(file)
+
+      return {
+        pass:
+          open0.state === 'open' && open0.side !== null && open0.fit !== null &&
+          open0.opacity >= 0.98 && open0.scale >= 0.99 &&
+          // The transition really ran, and every signal is gone.
+          closed.state === 'closed' && closed.opacity <= 0.02 &&
+          Math.abs(closed.scale - 0.94) <= 0.01 &&
+          closed.side === null && closed.fit === null &&
+          // Nothing is reported while dormant…
+          linesClosed.length === lines0.length &&
+          // …and re-enabling is a fresh transition, not a same-side no-op that
+          // would leave the log untouched.
+          open1.state === 'open' && open1.opacity >= 0.98 && open1.scale >= 0.99 &&
+          lines1.length === lines0.length + 1 &&
+          /^placement \(none\) →/.test(lines1[0]),
+        detail:
+          `open → state ${open0.state}/${open0.side}/${open0.fit}, opacity ${open0.opacity}, ` +
+          `scale ${open0.scale} · ` +
+          `disabled → state ${closed.state}/${closed.side}/${closed.fit}, opacity ${closed.opacity}, ` +
+          `scale ${closed.scale} · ` +
+          `re-enabled → state ${open1.state}, opacity ${open1.opacity}, scale ${open1.scale} · ` +
+          `log ${lines0.length} → ${linesClosed.length} → ${lines1.length} line(s), ` +
+          `newest "${lines1[0] ?? '(none)'}"`,
+      }
+    },
+  },
+  {
+    demo: EVENTS,
+    // "Only fires when the chosen side actually changes — so it converges, and
+    // is safe to render." The card's own footgun note explains what the other
+    // answer costs: `onPositioned` fires on every recalculation, a component
+    // re-render IS a recalculation, and a callback that reported every tick
+    // into the template would re-render its way into "Maximum recursive updates
+    // exceeded". So the silence is the feature, and it is what is measured:
+    // four scroll positions on one side must add zero lines, and the crossing
+    // must add exactly one, naming both sides.
+    name: 'card 10: onPlacementChange logs exactly one line per real side change, and nothing while the side holds',
+    fn: async () => {
+      const file = '10-events-state.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      __pg.set(__tt.toggle(file, 'enabled'), true)
+      await __pg.sleep(400)
+
+      const count = () => __tt.logLines(file).length
+      const newest = () => __tt.logLines(file)[0] ?? ''
+
+      await __tt.park(trigger, 250)
+      const hostH = Math.round(pop.getBoundingClientRect().height)
+      const refH = Math.round(trigger.getBoundingClientRect().height)
+      const highSide = pop.dataset.teleportPlacement
+      const start = count()
+
+      // Four positions with hundreds of px of room below: the side cannot
+      // legitimately change, so any new line is a callback firing on a
+      // same-side reposition.
+      const holds = []
+      for (const y of [320, 250, 400, 260]) {
+        await __tt.park(trigger, y)
+        holds.push(pop.dataset.teleportPlacement)
+      }
+      const afterHold = count()
+
+      // Now leave the popover half its own height of room below it, which it
+      // cannot use, while the room above is the whole page.
+      const low = Math.round(window.innerHeight - refH - hostH * 0.5)
+      const landedLow = await __tt.park(trigger, low)
+      const lowSide = pop.dataset.teleportPlacement
+      const afterFlip = count()
+      const flipLine = newest()
+
+      const lowHolds = []
+      for (const y of [low - 10, low, low - 6]) {
+        await __tt.park(trigger, y)
+        lowHolds.push(pop.dataset.teleportPlacement)
+      }
+      const afterLowHold = count()
+
+      await __tt.park(trigger, 250)
+      const backSide = pop.dataset.teleportPlacement
+      const afterBack = count()
+      const backLine = newest()
+
+      return {
+        pass:
+          hostH > 20 && landedLow > window.innerHeight * 0.5 &&
+          highSide === 'bottom' && holds.every((s) => s === 'bottom') &&
+          lowSide === 'top' && lowHolds.every((s) => s === 'top') &&
+          backSide === 'bottom' &&
+          // Silence on the four same-side moves…
+          afterHold === start && afterLowHold === afterFlip &&
+          // …and exactly one line per crossing, naming both sides.
+          afterFlip === start + 1 &&
+          afterBack === start + 2 &&
+          /^placement bottom → top/.test(flipLine) &&
+          /^placement top → bottom/.test(backLine),
+        detail:
+          `viewport ${window.innerHeight}px, popover ${hostH}px, reference ${refH}px · ` +
+          `high (250px down) → ${highSide}, 4 same-side moves → ${afterHold - start} new line(s) · ` +
+          `low (${landedLow}px down, ${Math.round(hostH * 0.5)}px of room below) → ${lowSide}, ` +
+          `${afterFlip - afterHold} new line(s): "${flipLine}" · ` +
+          `3 more same-side moves → ${afterLowHold - afterFlip} new line(s) · ` +
+          `back up → ${backSide}, ${afterBack - afterLowHold} new line(s): "${backLine}"`,
+      }
+    },
+  },
+  {
+    demo: EVENTS,
+    // `referenceHidden` and `hidden` are reported separately on purpose — the
+    // first is the measurement, emitted even when you have opted out so a
+    // consumer can drive a `v-if` from it; the second is what the library
+    // actually did. The card prints both, so this reads the payload where the
+    // reader reads it AND checks the host really went blank, because the pair
+    // agreeing on a chip while the popover still hangs over the page is the
+    // failure worth catching.
+    //
+    // Both directions: a hide that is never released leaves the host
+    // permanently invisible, and nothing about scrolling one way can see that.
+    name: 'card 10: scrolling the reference off the top blanks the host and flips both reported flags, and scrolling back restores it',
+    fn: async () => {
+      const file = '10-events-state.vue'
+      const pop = __tt.host(file, '.pop')
+      const trigger = __tt.trigger(file)
+      __pg.set(__tt.toggle(file, 'enabled'), true)
+      await __pg.sleep(400)
+
+      const snap = async (target) => {
+        const at = await __tt.park(trigger, target)
+        await __pg.sleep(250)
+        return {
+          at,
+          refTop: Math.round(trigger.getBoundingClientRect().top),
+          chip: __tt.chipAt(file, 1),
+          vis: getComputedStyle(pop).visibility,
+          marked: pop.dataset.teleportHidden !== undefined,
+        }
+      }
+
+      const onScreen = await snap(300)
+      const offTop = await snap(-120)
+      const backAgain = await snap(300)
+
+      return {
+        pass:
+          // The premise, measured rather than assumed.
+          offTop.refTop < -60 && onScreen.refTop > 200 &&
+          onScreen.chip === 'referenceHidden false · hidden false' &&
+          onScreen.vis === 'visible' && !onScreen.marked &&
+          offTop.chip === 'referenceHidden true · hidden true' &&
+          offTop.vis === 'hidden' && offTop.marked &&
+          backAgain.chip === 'referenceHidden false · hidden false' &&
+          backAgain.vis === 'visible' && !backAgain.marked,
+        detail:
+          [onScreen, offTop, backAgain]
+            .map((s) => `reference at ${s.refTop}px → visibility ${s.vis}, ` +
+              `data-teleport-hidden ${s.marked}, chip "${s.chip}"`)
+            .join(' · '),
+      }
+    },
+  },
 ]
 
 /**
@@ -950,7 +2317,87 @@ const SWEEP = `(async () => {
   return seen
 })()`
 
+/**
+ * Card 03's mobile branch, which needs a real narrow viewport.
+ *
+ * The full-bleed rule is ONE decision with two halves — a real `width: 100vw`
+ * and a `left` pinned to the viewport's edge — and it used to be re-derived per
+ * site with different terms. That is how an explicit `maxWidth` could override
+ * the width half while the anchor half kept pinning the host to the screen
+ * edge: a 160px menu stranded at x=0 with its trigger at x=42. Both halves are
+ * measured below, at 500px and again at 1280px.
+ */
+const FULL_BLEED = `(async () => {
+  const file = '03-sizing.vue'
+  const panel = __tt.host(file, '.panel')
+  const trigger = __tt.trigger(file, '.pg-btn')
+  __pg.set(__tt.toggle(file, 'matchWidth'), false)
+  __pg.set(__tt.toggle(file, 'maxWidth'), false)
+  __pg.set(__tt.slider(file, 'widthMultiplier'), 1.5)
+  __pg.sec(file).scrollIntoView({ block: 'center' })
+  await __pg.sleep(700)
+  const read = () => {
+    const p = __tt.box(panel)
+    const t = __tt.box(trigger)
+    return { w: p.width, left: p.left, refLeft: t.left, refW: t.width, vw: window.innerWidth }
+  }
+  const plain = read()
+  __pg.set(__tt.toggle(file, 'maxWidth'), true)
+  await __pg.sleep(300)
+  __pg.set(__pg.stage(file).querySelector('input.pg-input'), 160)
+  await __pg.sleep(550)
+  const capped = read()
+  __pg.set(__tt.toggle(file, 'maxWidth'), false)
+  await __pg.sleep(300)
+  return { plain, capped }
+})()`
+
 const NATIVE_CHECKS = [
+  {
+    demo: SIZING,
+    name: 'card 03: below 768px the panel becomes a real full-width sheet, and an explicit maxWidth opts out of the anchor as well as the width',
+    async run({ page, cdp, sessionId }) {
+      let mobile
+      let desktop
+      try {
+        await page.setViewport(500, 900)
+        await new Promise((r) => setTimeout(r, 800))
+        mobile = await page.evaluate(FULL_BLEED)
+        await page.setViewport(1280, 900)
+        await new Promise((r) => setTimeout(r, 800))
+        desktop = await page.evaluate(FULL_BLEED)
+      } finally {
+        await cdp.send('Emulation.clearDeviceMetricsOverride', {}, sessionId).catch(() => {})
+      }
+
+      return {
+        pass:
+          // The reference is nowhere near the screen's left edge, so a host at
+          // x=0 is a decision and not a coincidence.
+          mobile.plain.refLeft > 8 &&
+          // Full bleed: pinned to the viewport edge AND as wide as the viewport.
+          // The bug this replaces wrote only `max-width: 100vw` — a cap — which
+          // left a ~230px menu at x=0 while its trigger sat at x=42.
+          mobile.plain.left <= 1 &&
+          mobile.plain.w >= mobile.plain.vw - 1 &&
+          // An explicit maxWidth opts out of BOTH halves: the width it asked
+          // for, back at the reference's own left edge.
+          Math.abs(mobile.capped.w - 160) <= 1.5 &&
+          Math.abs(mobile.capped.left - mobile.capped.refLeft) <= 1 &&
+          // Above the breakpoint nothing full-bleeds at all.
+          Math.abs(desktop.plain.left - desktop.plain.refLeft) <= 1 &&
+          desktop.plain.w <= desktop.plain.refW * 1.5 + 1 &&
+          desktop.plain.w < desktop.plain.vw / 2,
+        detail:
+          `500px viewport (${mobile.plain.vw}px inner), reference at x=${mobile.plain.refLeft} · ` +
+          `everything off → panel ${mobile.plain.w}px wide at x=${mobile.plain.left} · ` +
+          `maxWidth 160 → ${mobile.capped.w}px at x=${mobile.capped.left} ` +
+          `(reference x=${mobile.capped.refLeft}) · ` +
+          `1280px viewport → panel ${desktop.plain.w}px at x=${desktop.plain.left}, ` +
+          `reference ${desktop.plain.refW}px at x=${desktop.plain.refLeft}`,
+      }
+    },
+  },
   {
     demo: TIP,
     name: "card 13: the content slider moves the placement at every window height, not just a short one",

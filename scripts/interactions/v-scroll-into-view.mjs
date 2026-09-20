@@ -976,6 +976,343 @@ const CHECKS = [
       }
     },
   },
+
+  // -------------------------------------------------------------------------
+  // 02 and 08 — the two cards on this tab that had no check at all, and between
+  // them the two claims nothing else here measures.
+  //
+  // 02 is the only card where the directive is written once and mounted FORTY
+  // times, which is the shape every real list has, and the only one whose
+  // correctness is a NON-event: `block: 'nearest'` on an active row that is
+  // already on screen must move the pane by zero. Every other `nearest` check
+  // in this file drives a target that is off screen, where `nearest` and `end`
+  // (approached from above) compute the same answer — so all of them would
+  // still pass if `nearest` silently became `end`, and a list that yanks itself
+  // by a row on every arrow-key press would ship green. `alignAxis` returns
+  // `null` for an in-view target and `scrollOne` then never calls `scrollTo`,
+  // so "did not move" is `===`, not a tolerance.
+  //
+  // 08 owns the CSS hook. Nothing else on the tab reads
+  // `data-scroll-into-view-state`, and asserting the attribute is *present*
+  // would be worth nothing — `mounted()` writes 'idle' unconditionally, so a
+  // directive whose scheduling was entirely removed would still satisfy it.
+  // What a consumer actually buys is a ring that LIGHTS: the checks below read
+  // the computed `outline-width` at the instant the attribute flips, so the
+  // stylesheet in the card has to have matched.
+  // -------------------------------------------------------------------------
+  {
+    demo: '02-v-for-active.vue',
+    name: "block: 'nearest' in a v-for: stepping across rows that are already on screen moves the list by zero",
+    fn: async () => {
+      const file = '02-v-for-active.vue'
+      const pane = __siv.pane(file)
+      const rows = [...__siv.stage(file).querySelectorAll('.row')]
+      const inner = pane.clientHeight
+      const origin = () => pane.getBoundingClientRect().top + pane.clientTop
+      const seenBottom = (el) => el.getBoundingClientRect().bottom - origin()
+      const pitch = rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top
+
+      // The last row fully inside the resting pane. Everything up to it is a
+      // step `nearest` must decline.
+      let lastFull = -1
+      for (let i = 0; i < rows.length; i++) if (seenBottom(rows[i]) <= inner + 0.5) lastFull = i
+      if (lastFull < 2) {
+        // Not a library failure — a card that stopped posing the question. Two
+        // visible rows is one step, and one step is not a demonstration.
+        return {
+          pass: false,
+          detail: `only ${lastFull + 1} row(s) of ${rows.length} fit in the ${inner}px pane (pitch ${pitch.toFixed(1)}px) — this check needs at least three so there is something to step ACROSS`,
+        }
+      }
+
+      const seen = []
+      for (let i = 1; i <= lastFull; i++) {
+        __siv.button(file, 'next').click()
+        await __siv.still(pane)
+        seen.push(pane.scrollTop)
+      }
+      const active = __siv.txt(__siv.stage(file).querySelector('.row.active'))
+      return {
+        // `===` rather than a tolerance on purpose: `nearest` on an in-view
+        // target computes `null` and no `scrollTo` is issued, so the only
+        // honest expectation is the same number the pane already held.
+        pass: seen.every((v) => v === 0) && active === `Item ${lastFull + 1}`,
+        detail:
+          `${lastFull} step(s) through the ${lastFull + 1} rows that fit in the ${inner}px pane ` +
+          `(pitch ${pitch.toFixed(1)}px): scrollTop ${seen.join(' → ')} — every one must be 0, and a ` +
+          `start alignment would have reached ${(lastFull * pitch).toFixed(1)}. Active row "${active}" ` +
+          `(expects "Item ${lastFull + 1}")`,
+      }
+    },
+  },
+  {
+    demo: '02-v-for-active.vue',
+    name: "block: 'nearest' in a v-for: the first row past the fold moves the list by its overhang, and lands flush",
+    fn: async () => {
+      const file = '02-v-for-active.vue'
+      const pane = __siv.pane(file)
+      const rows = [...__siv.stage(file).querySelectorAll('.row')]
+      const inner = pane.clientHeight
+      const origin = () => pane.getBoundingClientRect().top + pane.clientTop
+      const seenTop = (el) => el.getBoundingClientRect().top - origin()
+      const seenBottom = (el) => el.getBoundingClientRect().bottom - origin()
+      const pitch = rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top
+
+      let first = -1
+      for (let i = 0; i < rows.length && first < 0; i++) if (seenBottom(rows[i]) > inner + 0.5) first = i
+      if (first < 2) {
+        return {
+          pass: false,
+          detail: `the first row clipped by the ${inner}px pane is index ${first} (pitch ${pitch.toFixed(1)}px) — too near the top for "moved the minimum" to mean anything`,
+        }
+      }
+      const overhang = seenBottom(rows[first]) - inner
+      const startWould = seenTop(rows[first])
+
+      // `first` presses from the resting index 0 land ON row `first` — the
+      // first one that does not fit. The presses before it are the no-ops the
+      // check above owns; this one is the only press that may move anything.
+      for (let i = 0; i < first; i++) {
+        __siv.button(file, 'next').click()
+        await __siv.still(pane)
+      }
+      const active = __siv.txt(__siv.stage(file).querySelector('.row.active'))
+      const flush = seenBottom(rows[first]) - inner
+      const moved = pane.scrollTop
+      return {
+        // Tolerance, not equality: the row pitch is a fractional line box, so
+        // the overhang this check predicts is fractional too. It is still far
+        // tighter than the thing it separates — `start` would have moved
+        // `startWould`, several rows further.
+        pass:
+          active === `Item ${first + 1}` &&
+          Math.abs(moved - overhang) <= 1.5 &&
+          Math.abs(flush) <= 1.5 &&
+          moved < pitch,
+        detail:
+          `"${active}" (expects "Item ${first + 1}") overhung the ${inner}px pane by ${overhang.toFixed(1)}px ` +
+          `and the list moved ${moved.toFixed(1)}px (a start alignment would have moved ${startWould.toFixed(1)}, ` +
+          `an entire row is ${pitch.toFixed(1)}); its bottom edge now sits ${flush.toFixed(1)}px past the ` +
+          `pane's inner bottom, so it is flush and unclipped`,
+      }
+    },
+  },
+  {
+    demo: '02-v-for-active.vue',
+    name: "block: 'nearest' is not 'end': stepping BACK to a row already on screen does not drag the list up",
+    fn: async () => {
+      const file = '02-v-for-active.vue'
+      const pane = __siv.pane(file)
+      const rows = [...__siv.stage(file).querySelectorAll('.row')]
+      const inner = pane.clientHeight
+
+      __siv.button(file, 'jump to last').click()
+      await __siv.still(pane)
+      const atBottom = pane.scrollTop
+      const max = pane.scrollHeight - pane.clientHeight
+
+      __siv.button(file, 'prev').click()
+      await __siv.still(pane)
+      __siv.button(file, 'prev').click()
+      await __siv.still(pane)
+      const after = pane.scrollTop
+
+      const row = rows[rows.length - 3]
+      const origin = pane.getBoundingClientRect().top + pane.clientTop
+      const top = row.getBoundingClientRect().top - origin
+      const bottom = row.getBoundingClientRect().bottom - origin
+      // Where an `end` alignment would have parked it — the number this check
+      // exists to be different from. Every other `nearest` assertion in this
+      // file approaches from above, where the two agree.
+      const endWould = after + bottom - inner
+      const active = __siv.txt(__siv.stage(file).querySelector('.row.active'))
+
+      return {
+        pass:
+          Math.abs(atBottom - max) <= 1.5 &&
+          after === atBottom &&
+          top >= -0.5 &&
+          bottom <= inner + 0.5 &&
+          active === `Item ${rows.length - 2}`,
+        detail:
+          `jump to last parked the list at ${atBottom.toFixed(1)} of ${max.toFixed(1)}; two ← prev later ` +
+          `it is at ${after.toFixed(1)} — unmoved, where an end alignment would have dragged it to ` +
+          `${endWould.toFixed(1)}. Active row "${active}" (expects "Item ${rows.length - 2}") sits at ` +
+          `${top.toFixed(1)}…${bottom.toFixed(1)} inside the ${inner}px pane`,
+      }
+    },
+  },
+  {
+    demo: '02-v-for-active.vue',
+    name: "behavior: 'smooth' is passed through: the wrap to the last row animates instead of jumping",
+    fn: async () => {
+      const file = '02-v-for-active.vue'
+      const pane = __siv.pane(file)
+      // ← prev from the first row wraps to the fortieth: the longest scroll the
+      // card can ask for, and the one a human watches.
+      __siv.button(file, 'prev').click()
+      const trace = await __siv.trace(pane, 1200)
+      const moves = __siv.moves(trace)
+      await __siv.still(pane)
+
+      const rows = [...__siv.stage(file).querySelectorAll('.row')]
+      const last = rows[rows.length - 1]
+      const origin = pane.getBoundingClientRect().top + pane.clientTop
+      const bottom = last.getBoundingClientRect().bottom - origin
+      const max = pane.scrollHeight - pane.clientHeight
+      const chip = __siv.txt(__siv.stage(file).querySelector('.pg-chip'))
+
+      return {
+        pass:
+          moves.length >= 4 &&
+          Math.abs(pane.scrollTop - max) <= 1.5 &&
+          Math.abs(bottom - pane.clientHeight) <= 1.5 &&
+          chip === `active: Item ${rows.length}`,
+        detail:
+          `${moves.length} distinct scrollTop position(s) between ${trace[0]} and ${Math.round(pane.scrollTop)} ` +
+          `of a ${Math.round(max)}px range — an instant scroll is exactly 1; the last row's bottom rests ` +
+          `${bottom.toFixed(1)}px into the ${pane.clientHeight}px pane; chip reads "${chip}"`,
+      }
+    },
+  },
+
+  {
+    demo: '08-state-attribute.vue',
+    name: 'the ring actually lights: idle → pending → idle, and the CSS keyed on it paints 3px of outline',
+    fn: async () => {
+      const file = '08-state-attribute.vue'
+      const target = __siv.stage(file).querySelector('.target')
+      const ATTR = 'data-scroll-into-view-state'
+      const seen = []
+      // `getComputedStyle` inside the callback is the whole point: the record
+      // says the attribute changed, the computed outline says the stylesheet
+      // MATCHED. A renamed attribute, a state value the CSS does not spell, or
+      // a scope id that no longer lands on the host all read as 0px here while
+      // the attribute assertion on its own would still be green.
+      const obs = new MutationObserver((records) => {
+        const now = target.getAttribute(ATTR)
+        const outline = getComputedStyle(target).outlineWidth
+        for (let i = 0; i < records.length; i++) {
+          const last = i + 1 === records.length
+          seen.push({
+            from: records[i].oldValue,
+            to: last ? now : records[i + 1].oldValue,
+            // Only the final record of a batch has a computed style that
+            // belongs to it. A pending/idle pair delivered in ONE batch means
+            // the ring never survived to a frame — which is a failure, and is
+            // reported as one rather than silently measured against the wrong
+            // state.
+            outline: last ? outline : '(batched — never painted)',
+          })
+        }
+      })
+      obs.observe(target, { attributes: true, attributeFilter: [ATTR], attributeOldValue: true })
+
+      const before = { value: target.getAttribute(ATTR), outline: getComputedStyle(target).outlineWidth }
+      __siv.button(file, 'watch the ring').click()
+      await __siv.sleep(1500)
+      obs.disconnect()
+      const after = { value: target.getAttribute(ATTR), outline: getComputedStyle(target).outlineWidth }
+
+      const pending = seen.find((s) => s.to === 'pending')
+      const path = seen.map((s) => `${s.from}→${s.to} @${s.outline}`).join(', ')
+      return {
+        pass:
+          before.value === 'idle' &&
+          parseFloat(before.outline) === 0 &&
+          !!pending &&
+          pending.from === 'idle' &&
+          parseFloat(pending.outline) >= 3 &&
+          seen.length >= 2 &&
+          seen[seen.length - 1].to === 'idle' &&
+          after.value === 'idle' &&
+          parseFloat(after.outline) === 0,
+        detail:
+          `at rest ${before.value}/${before.outline}; transitions ${path || '(none — the attribute never moved)'}; ` +
+          `settled ${after.value}/${after.outline} — the ring must be unlit before, 3px while pending, and unlit after`,
+      }
+    },
+  },
+  {
+    demo: '08-state-attribute.vue',
+    name: "'pending' is the queued frame, not the journey: the ring lights with the pane still at rest and is out before it arrives",
+    fn: async () => {
+      const file = '08-state-attribute.vue'
+      const pane = __siv.pane(file)
+      const target = __siv.stage(file).querySelector('.target')
+      const ATTR = 'data-scroll-into-view-state'
+      const marks = []
+      const obs = new MutationObserver(() => {
+        marks.push({ value: target.getAttribute(ATTR), at: performance.now(), scrollTop: pane.scrollTop })
+      })
+      obs.observe(target, { attributes: true, attributeFilter: [ATTR] })
+
+      __siv.button(file, 'watch the ring').click()
+      await __siv.until(() => marks.some((m) => m.value === 'idle'), 3000, 16)
+      obs.disconnect()
+      await __siv.until(() => pane.scrollTop > 0, 3000, 16)
+      await __siv.still(pane, 4000)
+
+      const pi = marks.findIndex((m) => m.value === 'pending')
+      const pending = pi >= 0 ? marks[pi] : null
+      const idle = pi >= 0 ? marks.slice(pi + 1).find((m) => m.value === 'idle') : null
+      const held = pending && idle ? idle.at - pending.at : NaN
+      return {
+        // The contract the card's blurb sells: 'pending' spans the rAF the
+        // directive queued, and the scroll happens on the far side of it. A
+        // ring that stayed lit for the whole travel — or one lit after the
+        // pane had already started moving — is a different, worse hook, and
+        // both of those read here.
+        pass: !!pending && pending.scrollTop === 0 && !!idle && held < 100 && pane.scrollTop > 100,
+        detail:
+          `ring lit with the pane at scrollTop ${pending ? pending.scrollTop : 'n/a'} (must be 0 — nothing ` +
+          `has scrolled yet), held ${Number.isFinite(held) ? held.toFixed(1) : 'n/a'}ms (one frame ≈ 17ms), ` +
+          `and the pane then travelled to ${Math.round(pane.scrollTop)}; states seen: ` +
+          `${marks.map((m) => m.value).join(' → ') || '(none)'}`,
+      }
+    },
+  },
+  {
+    demo: '08-state-attribute.vue',
+    name: "block: 'center' behind the ring: the target parks on the pane's midline, and nothing outside the pane moves",
+    fn: async () => {
+      const file = '08-state-attribute.vue'
+      const pane = __siv.pane(file)
+      const target = __siv.stage(file).querySelector('.target')
+      // Every scrollable thing above the pane. `container` exists precisely to
+      // keep these still; dropping it would leave the centring assertion below
+      // green (the pane is the nearest scrollable ancestor, so it moves either
+      // way) while the page lurched under the reader.
+      const outer = []
+      for (let n = pane.parentElement; n; n = n.parentElement) outer.push(n)
+      if (document.scrollingElement && !outer.includes(document.scrollingElement)) {
+        outer.push(document.scrollingElement)
+      }
+      const beforeOuter = outer.map((n) => n.scrollTop)
+      const before = pane.scrollTop
+
+      __siv.button(file, 'watch the ring').click()
+      await __siv.until(() => pane.scrollTop > 0, 3000, 16)
+      await __siv.still(pane, 4000)
+
+      const p = pane.getBoundingClientRect()
+      const t = target.getBoundingClientRect()
+      const mid = t.top + t.height / 2 - (p.top + pane.clientTop + pane.clientHeight / 2)
+      const afterOuter = outer.map((n) => n.scrollTop)
+      const drifted = outer
+        .map((n, i) => (afterOuter[i] === beforeOuter[i] ? null : `${n.tagName.toLowerCase()}${n.id ? '#' + n.id : ''} ${beforeOuter[i]}→${afterOuter[i]}`))
+        .filter(Boolean)
+      const max = pane.scrollHeight - pane.clientHeight
+
+      return {
+        pass: before === 0 && pane.scrollTop > 100 && Math.abs(mid) <= 2 && drifted.length === 0,
+        detail:
+          `pane ${before} → ${Math.round(pane.scrollTop)} of ${Math.round(max)}; the target's centre rests ` +
+          `${mid.toFixed(1)}px off the ${pane.clientHeight}px pane's midline; ${outer.length} ancestor ` +
+          `scroller(s) ${drifted.length ? 'MOVED: ' + drifted.join(', ') : 'all unmoved'}`,
+      }
+    },
+  },
 ]
 
 /**

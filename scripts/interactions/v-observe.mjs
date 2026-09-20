@@ -67,14 +67,18 @@ window.__obs = {
 const ROOT_MARGIN = '05-root-margin.vue'
 const LAZY = '01-lazy-once.vue'
 const CROSSED = '02-thresholds-crossed.vue'
+const DIRECTION = '03-direction.vue'
 const CSS_ONLY = '04-css-only.vue'
 const TICK = '06-resize-tick.vue'
 const BRACKETS = '07-resize-breakpoints.vue'
+const RESIZE_CROSSED = '08-resize-crossed.vue'
 const ORIENT = '09-resize-orientation.vue'
 const BOXES = '10-resize-box-debounce.vue'
 const ATTR = '11-mutate-attr.vue'
 const CHILDREN = '12-mutate-children.vue'
 const TEXT = '13-mutate-text.vue'
+const REMOVED = '14-mutate-removed.vue'
+const MULTI = '15-mutate-multi.vue'
 const GATE = '16-gate-on-intersect.vue'
 const COMBINED = '17-combined.vue'
 
@@ -251,6 +255,140 @@ const CHECKS = [
     },
   },
   {
+    demo: DIRECTION,
+    // `direction` is inferred from where the element's top was on the PREVIOUS
+    // tick, so it is the one piece of intersect data that cannot be read off a
+    // single entry — and the one jsdom can never produce, because nothing there
+    // has a top. The card is driven through a full pass: in from below, out
+    // over the top, and back in from above, with the pane's own geometry
+    // measured at every stop so a layout change fails the check instead of
+    // silently inverting it.
+    //
+    // An inverted delta would report `enter-from-above` for a scroll DOWN and
+    // animate the panel in from the wrong edge. A `direction` that only ever
+    // described entries would leave `leave-to-above` unreported.
+    name: 'a pass through the pane reports enter-from-below, leave-to-above, then enter-from-above',
+    fn: async () => {
+      const file = '03-direction.vue'
+      const scroller = __obs.scroller(file)
+      const reveal = __pg.stage(file).querySelector('.reveal')
+      const dir = () => /last direction:\s*(\S+)/.exec(__pg.txt(reveal))?.[1] ?? '(unreadable)'
+      const badge = () => reveal.getAttribute('data-reveal')
+      const anim = () => getComputedStyle(reveal).animationName
+
+      scroller.scrollTop = 0
+      await __pg.sleep(500)
+      const pane = Math.round(scroller.getBoundingClientRect().height)
+      const tall = Math.round(reveal.getBoundingClientRect().height)
+
+      // Parked below the pane's bottom edge: nothing has been crossed yet.
+      const belowGap = await __obs.park(scroller, reveal, 60)
+      const hidden = { dir: dir(), badge: badge() }
+
+      // Down into the pane — the section's top travels UP the viewport.
+      const inGap = await __obs.park(scroller, reveal, -40)
+      await __pg.until(() => dir() !== '—', 3000)
+      const entered = { dir: dir(), badge: badge(), anim: anim() }
+
+      // Further down, until the whole section clears the pane's TOP edge.
+      const aboveGap = await __obs.park(scroller, reveal, -(pane + tall + 40))
+      await __pg.until(() => dir().startsWith('leave'), 3000)
+      const left = { dir: dir(), badge: badge() }
+
+      // Back up: the top now travels DOWN, so it comes in from above.
+      const backGap = await __obs.park(scroller, reveal, -40)
+      await __pg.until(() => dir() === 'enter-from-above', 3000)
+      const reentered = { dir: dir(), badge: badge(), anim: anim() }
+
+      return {
+        pass:
+          belowGap > 40 &&
+          hidden.dir === '—' &&
+          hidden.badge === null &&
+          inGap < 0 &&
+          entered.dir === 'enter-from-below' &&
+          entered.badge === 'from-below' &&
+          // Clear of the top edge, not merely scrolled a bit.
+          aboveGap + pane + tall < 0 &&
+          left.dir === 'leave-to-above' &&
+          // Leaving is not an entry: the reveal animation keeps its direction.
+          left.badge === 'from-below' &&
+          backGap < 0 &&
+          reentered.dir === 'enter-from-above' &&
+          reentered.badge === 'from-above' &&
+          // …and the two directions really paint differently.
+          entered.anim !== 'none' &&
+          reentered.anim !== 'none' &&
+          entered.anim !== reentered.anim,
+        detail:
+          `pane ${pane}px, section ${tall}px · ` +
+          `${belowGap}px below → ${hidden.dir}/${hidden.badge} · ` +
+          `${inGap}px inside → ${entered.dir}/${entered.badge}/${entered.anim} · ` +
+          `${aboveGap}px (clear of the top) → ${left.dir}/${left.badge} · ` +
+          `${backGap}px inside again → ${reentered.dir}/${reentered.badge}/${reentered.anim}`,
+      }
+    },
+  },
+  {
+    demo: DIRECTION,
+    // The card's handler bails on `if (!e.direction) return`, so everything it
+    // shows depends on `direction` being null whenever visibility did NOT flip.
+    // The first-tick fallback is the risk: it compares the element's top
+    // against the root's centre, and running it for an entry that never
+    // happened would announce a direction — and start an animation — for a
+    // section the reader has not reached yet.
+    name: 'silent at mount and across scrolls that never flip visibility; speaks the moment it enters',
+    fn: async () => {
+      const file = '03-direction.vue'
+      const scroller = __obs.scroller(file)
+      const reveal = __pg.stage(file).querySelector('.reveal')
+      const dir = () => /last direction:\s*(\S+)/.exec(__pg.txt(reveal))?.[1] ?? '(unreadable)'
+      const gap = () =>
+        Math.round(reveal.getBoundingClientRect().top - scroller.getBoundingClientRect().bottom)
+
+      scroller.scrollTop = 0
+      await __pg.sleep(600)
+      const mounted = {
+        dir: dir(),
+        badge: reveal.getAttribute('data-reveal'),
+        anim: getComputedStyle(reveal).animationName,
+        gap: gap(),
+      }
+
+      // Two scrolls that move the section without ever putting it in the pane.
+      const steps = []
+      for (const target of [Math.max(30, mounted.gap - 40), Math.max(15, mounted.gap - 80)]) {
+        const parked = await __obs.park(scroller, reveal, target)
+        steps.push(`${parked}px→${dir()}`)
+      }
+      const stillSilent = dir()
+      const stillDark = reveal.getAttribute('data-reveal')
+
+      // …and now one that does.
+      const inGap = await __obs.park(scroller, reveal, -50)
+      await __pg.until(() => dir() !== '—', 3000)
+      const spoke = dir()
+
+      return {
+        pass:
+          mounted.gap > 0 &&
+          mounted.dir === '—' &&
+          mounted.badge === null &&
+          mounted.anim === 'none' &&
+          steps.every((s) => s.endsWith('→—')) &&
+          stillSilent === '—' &&
+          stillDark === null &&
+          inGap < 0 &&
+          spoke === 'enter-from-below' &&
+          getComputedStyle(reveal).animationName !== 'none',
+        detail:
+          `at mount ${mounted.gap}px below the edge: "${mounted.dir}" badge=${mounted.badge} ` +
+          `animation=${mounted.anim} · outside scrolls ${steps.join(' ')} · ` +
+          `${inGap}px inside → "${spoke}" animation=${getComputedStyle(reveal).animationName}`,
+      }
+    },
+  },
+  {
     demo: CSS_ONLY,
     name: 'the state attribute drives real computed opacity',
     fn: async () => {
@@ -347,6 +485,120 @@ const CHECKS = [
         detail: rows
           .map((r) => `${r.measured}px: handler ${r.reported}, css ${r.segment}, expected ${r.expected}`)
           .join(' | '),
+      }
+    },
+  },
+  {
+    demo: RESIZE_CROSSED,
+    // Every event of a multi-bracket jump used to be stamped with the FINAL
+    // bracket, so a 180px → 520px drag told the handler the element was
+    // already `>=400` at the moment it crossed 240. A consumer swapping
+    // layouts per event then mounted the desktop layout twice and never the
+    // tablet one. Each crossing here is read back with the label it is
+    // supposed to carry: the bracket THAT crossing entered.
+    name: 'nothing at mount; a two-bracket jump labels each crossing with the bracket it entered',
+    fn: async () => {
+      const file = '08-resize-crossed.vue'
+      const box = __pg.stage(file).querySelector('.box')
+      const width = () => Math.round(box.getBoundingClientRect().width)
+      // Newest first, so reverse for the order the handler saw them.
+      const crossings = () =>
+        [...__obs.log(file).matchAll(/(width|height) crossed (\d+) going (up|down) → (\S+)/g)]
+          .map((m) => `${m[1]}:${m[2]}:${m[3]}:${m[4]}`)
+          .reverse()
+
+      await __pg.sleep(600)
+      const atMount = __obs.log(file)
+      const startWidth = width()
+
+      box.style.width = '180px' // 300 → 180: one crossing, downward
+      await __pg.sleep(500)
+      const afterDown = crossings()
+      const downWidth = width()
+
+      box.style.width = '520px' // 180 → 520: 240 and then 400, upward
+      await __pg.sleep(500)
+      const afterJump = crossings()
+      const upWidth = width()
+
+      return {
+        pass:
+          atMount.startsWith('— resize past a threshold') &&
+          startWidth > 240 && startWidth < 400 &&
+          downWidth < 240 &&
+          upWidth > 400 &&
+          afterDown.length === 1 &&
+          afterDown[0] === 'width:240:down:<240' &&
+          afterJump.length === 3 &&
+          // Ascending, and each labelled with where that crossing landed.
+          afterJump[1] === 'width:240:up:240-400' &&
+          afterJump[2] === 'width:400:up:>=400',
+        detail:
+          `at mount "${atMount.slice(0, 34)}" @${startWidth}px · ` +
+          `→${downWidth}px ${JSON.stringify(afterDown)} · ` +
+          `→${upWidth}px ${JSON.stringify(afterJump)}`,
+      }
+    },
+  },
+  {
+    demo: RESIZE_CROSSED,
+    // The two claims the card's own blurb makes, measured: nothing fires while
+    // you stay inside a bracket (that is the whole difference from tick mode),
+    // and `axis` decides which dimension is compared — a width drag past 240
+    // must be silent while the observer is watching height.
+    name: 'inside a bracket is silent; axis picks the dimension; both emits one event per axis',
+    fn: async () => {
+      const file = '08-resize-crossed.vue'
+      const box = __pg.stage(file).querySelector('.box')
+      const select = __obs.select(file)
+      const rect = () => {
+        const r = box.getBoundingClientRect()
+        return `${Math.round(r.width)}×${Math.round(r.height)}`
+      }
+      const crossings = () =>
+        [...__obs.log(file).matchAll(/(width|height) crossed (\d+) going (up|down) → (\S+)/g)]
+          .map((m) => `${m[1]}:${m[2]}:${m[3]}:${m[4]}`)
+          .reverse()
+
+      await __pg.sleep(600)
+      box.style.width = '360px' // 300 → 360, still inside 240-400
+      await __pg.sleep(500)
+      const insideBracket = { log: __obs.log(file), at: rect() }
+
+      // Watching HEIGHT now: a width drag straight through 240 is not ours.
+      __pg.set(select, 'height')
+      await __pg.sleep(350)
+      box.style.width = '180px'
+      await __pg.sleep(500)
+      const widthWhileHeight = { log: __obs.log(file), at: rect() }
+
+      box.style.height = '300px' // 200 → 300 crosses 240 upward
+      await __pg.sleep(500)
+      const heightMoved = { crossings: crossings(), at: rect() }
+
+      // Both axes, one diagonal change, opposite directions.
+      __pg.button(file, 'Clear log').click()
+      __pg.set(select, 'both')
+      await __pg.sleep(350)
+      box.style.width = '300px' // 180 → 300: up through 240
+      box.style.height = '180px' // 300 → 180: down through 240
+      await __pg.sleep(600)
+      const diagonal = { crossings: crossings(), at: rect() }
+
+      return {
+        pass:
+          insideBracket.log.startsWith('— resize past a threshold') &&
+          widthWhileHeight.log.startsWith('— resize past a threshold') &&
+          heightMoved.crossings.length === 1 &&
+          heightMoved.crossings[0] === 'height:240:up:240-400' &&
+          diagonal.crossings.length === 2 &&
+          diagonal.crossings[0] === 'width:240:up:240-400' &&
+          diagonal.crossings[1] === 'height:240:down:<240',
+        detail:
+          `inside the bracket @${insideBracket.at}: "${insideBracket.log.slice(0, 30)}" · ` +
+          `width past 240 while axis=height @${widthWhileHeight.at}: "${widthWhileHeight.log.slice(0, 30)}" · ` +
+          `height moved @${heightMoved.at}: ${JSON.stringify(heightMoved.crossings)} · ` +
+          `axis=both diagonal @${diagonal.at}: ${JSON.stringify(diagonal.crossings)}`,
       }
     },
   },
@@ -553,6 +805,243 @@ const CHECKS = [
           log.includes('a long enough first linehi') &&
           !log.includes('"hi"'),
         detail: `one node → "${afterLong}"; edit in the second node → "${afterSplit}"; log "${log.slice(0, 110)}"`,
+      }
+    },
+  },
+  {
+    demo: REMOVED,
+    // `removed` is the only mode whose observer is on the PARENT, watching a
+    // childList that every sibling shares. Firing on any removal from it would
+    // tear down a live chart the first time a neighbouring node blinked, so the
+    // noise is driven first and the real removal second.
+    name: 'a sibling appearing and leaving is not the host being removed — ripping the host is',
+    fn: async () => {
+      const file = '14-mutate-removed.vue'
+      const host = __pg.stage(file).querySelector('.host')
+      const rip = __pg.button(file, 'Rip the node out')
+      await __pg.sleep(500)
+      const before = { status: __obs.kv(file), attached: document.contains(host), disabled: rip.disabled }
+
+      // Noise on exactly the childList the removal observer watches.
+      const decoy = document.createElement('div')
+      decoy.className = 'decoy'
+      host.parentNode.appendChild(decoy)
+      await __pg.sleep(400)
+      const afterSiblingAdded = __obs.kv(file)
+      decoy.remove()
+      await __pg.sleep(400)
+      const afterSiblingRemoved = __obs.kv(file)
+
+      rip.click()
+      await __pg.until(() => __obs.kv(file).startsWith('removed'), 3000)
+      await __pg.sleep(250)
+      const after = { status: __obs.kv(file), attached: document.contains(host), disabled: rip.disabled }
+
+      return {
+        pass:
+          before.status === 'mounted — chart instance alive' &&
+          before.attached === true &&
+          before.disabled === false &&
+          afterSiblingAdded === before.status &&
+          afterSiblingRemoved === before.status &&
+          after.status === 'removed — tearDownChartInstance() ran' &&
+          after.attached === false &&
+          after.disabled === true,
+        detail:
+          `before: "${before.status}" attached=${before.attached} · ` +
+          `sibling added → "${afterSiblingAdded}" · sibling removed → "${afterSiblingRemoved}" · ` +
+          `after the rip: "${after.status}" attached=${after.attached} button disabled=${after.disabled}`,
+      }
+    },
+  },
+  {
+    demo: REMOVED,
+    // What `container.innerHTML = ''` actually looks like to a MutationObserver:
+    // ONE record whose `removedNodes` carries the host somewhere in the middle
+    // of its siblings. That is how Bootstrap and jQuery dispose of a subtree, so
+    // a scan that only looked at `removedNodes[0]` would leave the chart
+    // instance alive for the most common teardown there is.
+    //
+    // The status paragraph goes with the wipe, so its element is captured
+    // first: Vue keeps patching it while it is detached, which is what makes
+    // the handler's effect readable at all.
+    name: 'the host is found inside a batch removal that takes every sibling with it',
+    fn: async () => {
+      const file = '14-mutate-removed.vue'
+      const stage = __pg.stage(file)
+      const host = stage.querySelector('.host')
+      const kv = stage.querySelector('.pg-kv')
+      await __pg.sleep(500)
+      const before = __pg.txt(kv)
+
+      const parent = host.parentNode
+      const siblings = parent.childNodes.length
+      const position = [...parent.childNodes].indexOf(host)
+
+      parent.replaceChildren() // one record, every child in removedNodes
+      const detached = !document.contains(host)
+      await __pg.until(() => __pg.txt(kv).startsWith('removed'), 3000)
+      await __pg.sleep(250)
+      const after = __pg.txt(kv)
+
+      return {
+        pass:
+          before === 'mounted — chart instance alive' &&
+          siblings > 2 &&
+          // Not first in the record: the scan has to look past index 0.
+          position > 0 &&
+          detached === true &&
+          after === 'removed — tearDownChartInstance() ran',
+        detail:
+          `host was child ${position} of ${siblings} · before "${before}" · ` +
+          `detached=${detached} · after "${after}"`,
+      }
+    },
+  },
+  {
+    demo: MULTI,
+    // One click mutates an attribute, appends three children and changes the
+    // host's text, all inside a single Vue flush. Three children must arrive as
+    // ONE `children:added` carrying three nodes — a handler that re-lays out a
+    // grid would otherwise do it three times — and each event must describe the
+    // host as it is now: the attribute's real old value, and the WHOLE host's
+    // text rather than the one node the browser happened to report.
+    name: 'one burst is one flush: +3 children in a single event, with the real old class and whole-host text',
+    fn: async () => {
+      const file = '15-mutate-multi.vue'
+      const panel = __pg.stage(file).querySelector('.panel')
+      const chips = () => panel.querySelectorAll('.pg-chip').length
+      const count = (s, needle) => s.split(needle).length - 1
+
+      await __pg.sleep(500)
+      const before = { log: __obs.log(file), chips: chips(), cls: panel.getAttribute('class') }
+
+      __pg.button(file, 'Mutate everything at once').click()
+      await __pg.until(() => __obs.log(file) !== before.log, 3000)
+      await __pg.sleep(500)
+
+      const log = __obs.log(file)
+      const added = /children:added \+(\d+)/.exec(log)?.[1]
+      // `to` can be several words if the host's text ever contains spaces, so the
+      // entry ends where the next one begins rather than at the first space.
+      const text = /text (\S+) → (.+?)(?= children:added| children:removed| attr:class|$)/.exec(log)
+      // `attr:class` is pushed first and unshifted first, so it is the oldest
+      // line of the flush — the tail of the collapsed log.
+      const attr = log.slice(log.indexOf('attr:class ') + 'attr:class '.length).split(' → ')
+
+      return {
+        pass:
+          before.log.startsWith('— press the button') &&
+          before.chips === 1 &&
+          chips() === 4 &&
+          // One event, three nodes — not three events of one.
+          count(log, 'children:added') === 1 &&
+          added === '3' &&
+          count(log, 'children:removed') === 0 &&
+          count(log, 'attr:class') === 1 &&
+          attr[0] === before.cls &&
+          attr[1] === panel.getAttribute('class') &&
+          attr[0] !== attr[1] &&
+          // The diff is of the host, and its `to` is what the host now says.
+          count(log, 'text ') === 1 &&
+          text?.[1] === 'a' &&
+          text?.[2] === __pg.txt(panel),
+        detail:
+          `chips ${before.chips}→${chips()} · class "${before.cls}"→"${panel.getAttribute('class')}" · ` +
+          `host text "${__pg.txt(panel)}" · log "${log}"`,
+      }
+    },
+  },
+  {
+    demo: MULTI,
+    // The debounce window, measured from both sides: nothing is reported while
+    // it is open even though the DOM has already changed twice, and what comes
+    // out is ONE flush describing the window's net effect — six children
+    // concatenated across two separate callbacks, and a class that ended the
+    // window exactly where it started.
+    name: 'a 500ms window holds two bursts back, then reports their net effect once',
+    fn: async () => {
+      const file = '15-mutate-multi.vue'
+      const panel = __pg.stage(file).querySelector('.panel')
+      const chips = () => panel.querySelectorAll('.pg-chip').length
+      const count = (s, needle) => s.split(needle).length - 1
+
+      __pg.set(__obs.slider(file, 'debounce'), 500)
+      await __pg.sleep(400)
+      const startCls = panel.getAttribute('class')
+      const burst = __pg.button(file, 'Mutate everything at once')
+
+      burst.click()
+      await __pg.sleep(120)
+      burst.click()
+      await __pg.sleep(200) // 200ms into a 500ms window: the DOM has moved, the handler has not
+      const during = { log: __obs.log(file), chips: chips(), cls: panel.getAttribute('class') }
+
+      await __pg.sleep(900)
+      const log = __obs.log(file)
+      const added = /children:added \+(\d+)/.exec(log)?.[1]
+      // `to` can be several words if the host's text ever contains spaces, so the
+      // entry ends where the next one begins rather than at the first space.
+      const text = /text (\S+) → (.+?)(?= children:added| children:removed| attr:class|$)/.exec(log)
+      const attr = log.slice(log.indexOf('attr:class ') + 'attr:class '.length).split(' → ')
+
+      return {
+        pass:
+          during.log.startsWith('— press the button') &&
+          during.chips === 7 &&
+          // Two bursts, one flush.
+          count(log, 'children:added') === 1 &&
+          added === '6' &&
+          count(log, 'attr:class') === 1 &&
+          count(log, 'text ') === 1 &&
+          // The window opened on `calm` and closed on `calm`, and the reported
+          // `to` is the class the element is actually wearing.
+          attr[0] === startCls &&
+          attr[1] === panel.getAttribute('class') &&
+          attr[1] === startCls &&
+          text?.[1] === 'a' &&
+          text?.[2] === __pg.txt(panel) &&
+          chips() === 7,
+        detail:
+          `200ms into the window: ${during.chips} chips on screen, class "${during.cls}", log "${during.log.slice(0, 28)}" · ` +
+          `after it closed: ${chips()} chips, class "${panel.getAttribute('class')}", log "${log}"`,
+      }
+    },
+  },
+  {
+    demo: MULTI,
+    // The orange outline the card's blurb promises. `mutate:active` is written
+    // by the flush and reverted 150ms later, and the only thing that proves the
+    // attribute reaches the page is the painted border colour — the stylesheet
+    // rule is keyed on `data-observe-state*='mutate:active'`.
+    name: 'the flush paints the panel orange and the 150ms cooldown paints it back',
+    fn: async () => {
+      const file = '15-mutate-multi.vue'
+      const panel = __pg.stage(file).querySelector('.panel')
+      const border = () => getComputedStyle(panel).borderTopColor
+
+      __pg.set(__obs.slider(file, 'debounce'), 0) // flush on the spot
+      await __pg.sleep(400)
+      const idleBefore = { seg: __obs.segment(panel, 'mutate'), color: border() }
+
+      __pg.button(file, 'Mutate everything at once').click()
+      await __pg.sleep(60) // inside the 150ms cooldown
+      const active = { seg: __obs.segment(panel, 'mutate'), color: border() }
+
+      await __pg.sleep(500)
+      const cooled = { seg: __obs.segment(panel, 'mutate'), color: border() }
+
+      return {
+        pass:
+          idleBefore.seg === 'idle' &&
+          idleBefore.color === 'rgba(0, 0, 0, 0)' &&
+          active.seg === 'active' &&
+          active.color === 'rgb(245, 158, 11)' &&
+          cooled.seg === 'idle' &&
+          cooled.color === 'rgba(0, 0, 0, 0)',
+        detail:
+          `before: ${idleBefore.seg}/${idleBefore.color} · ` +
+          `+60ms: ${active.seg}/${active.color} · +560ms: ${cooled.seg}/${cooled.color}`,
       }
     },
   },
