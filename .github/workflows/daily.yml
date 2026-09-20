@@ -94,8 +94,34 @@ jobs:
       # The job still fails if anything fails; it just reports everything it
       # could have told us on the way down. Checkout/install/build stay hard
       # prerequisites, because a check that cannot run is not news.
+      # QUARANTINED, deliberately and temporarily. Owner: "add allow fail then
+      # fix it, I wanna see a succeeding pipeline until we fix it".
+      #
+      # The reasoning is sound: this job has never once been green in 30+ runs,
+      # so there is no baseline to regress FROM — every failure has to be read
+      # from scratch and nothing can be attributed. One green run is worth more
+      # than one more red one.
+      #
+      # What is quarantined is ONE known defect, already diagnosed, not the
+      # gate: `pnpm geometry` still runs on every push and its output is still
+      # in the log. It reports, deterministically and at all three viewports,
+      # on v-fit-children card 03:
+      #
+      #   visible span* 112px + div 105px + 1x6px gap = 223px against 219px available
+      #
+      # A 4px overrun that does not reproduce on macOS, where the same row has
+      # 25px of slack. The arithmetic points at gap accounting for a pinned
+      # child: `fit.ts` reserves the pin's cost up front, out of DOM order, and
+      # the 6px gap between it and the next admitted child appears to go
+      # unbilled — which only shows when the numbers are tight enough for 6px
+      # to matter.
+      #
+      # v-fit-children is under a feature freeze, so this is the owner's call
+      # to make, not a fix to sneak in. REMOVE continue-on-error the moment it
+      # is made: a quarantine nobody removes is just a deleted test.
       - run: pnpm geometry
         if: always()
+        continue-on-error: true
 
   deploy:
     needs: verify-npm
