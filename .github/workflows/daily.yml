@@ -49,8 +49,11 @@ jobs:
       - run: pnpm install --lockfile-only --ignore-scripts
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:npm
+        if: always()
       - run: pnpm audit:npm
+        if: always()
       - run: pnpm typecheck
+        if: always()
       # DOCS-6. `markdown` needs no browser and catches a renderer that cannot
       # terminate, so it runs before anything launches Chrome. `docs:ci` builds
       # this repository alone and asserts every documentation tab renders a
@@ -58,22 +61,41 @@ jobs:
       # showed an error banner on the live site. `tabs` drives both tab strips
       # with real keys.
       - run: pnpm markdown
+        if: always()
       - run: pnpm build
       - run: pnpm docs:ci
+        if: always()
       - run: pnpm tabs
+        if: always()
       # PG-26. Asserts every library reaches the BROWSER as ESM, under npm
       # resolution. A stale CI-only alias sent the CJS build of
       # bigdecimal-string to the browser and took eleven demos down on the
       # live site; smoke passed throughout, because it aliases to source.
       - run: pnpm modules
+        if: always()
       - run: pnpm smoke
+        if: always()
       # The harness's own tests. A reporter that loses the failure is worse
       # than a missing check: the run still goes red, and the message sends
       # you looking in the wrong place. Five rejections rendered as the bare
       # string "Uncaught (in promise)" for two days because of that.
       - run: pnpm harness
+        if: always()
       - run: pnpm interactions
+        if: always()
+      # Every verification step carries `if: always()`. This job had NEVER
+      # completed — 29 runs, 25 failures, 4 cancellations, no successes — and
+      # `geometry` sits behind `interactions`, so it had never executed once.
+      # A red gate silently hiding the gate behind it is how a pipeline stops
+      # being information: you fix the first failure, and the second one is
+      # waiting, and you learn about it a day later.
+      #
+      # Owner: "do not let a failed task skip others it's our pipeline".
+      # The job still fails if anything fails; it just reports everything it
+      # could have told us on the way down. Checkout/install/build stay hard
+      # prerequisites, because a check that cannot run is not news.
       - run: pnpm geometry
+        if: always()
 
   deploy:
     needs: verify-npm
